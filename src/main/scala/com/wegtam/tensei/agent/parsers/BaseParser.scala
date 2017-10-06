@@ -21,8 +21,10 @@ import javax.xml.xpath.{ XPathConstants, XPathFactory }
 
 import akka.event.DiagnosticLoggingAdapter
 import akka.util.ByteString
+import cats.implicits._
 import com.wegtam.tensei.adt.{ Cookbook, DFASDLReference }
 import com.wegtam.tensei.agent.adt.BaseParserResponseStatus.{ END_OF_DATA, END_OF_SEQUENCE }
+import com.wegtam.tensei.agent.adt.types.ParserData
 import com.wegtam.tensei.agent.adt.{
   BaseParserChoiceStatus,
   BaseParserResponse,
@@ -116,11 +118,11 @@ trait BaseParser
   @throws[NumberFormatException]
   def cleanAndValidateData(container: ParserDataContainer,
                            element: Element): ParserDataContainer = {
-    if (container.elementId != element.getAttribute("id"))
-      throw new IllegalArgumentException(
-        s"Container element id and structure element id do not match (${container.elementId} != ${element
-          .getAttribute("id")})!"
-      )
+    require(
+      container.elementId === element.getAttribute("id"),
+      s"Container element id and structure element id do not match (${container.elementId} != ${element
+        .getAttribute("id")})!"
+    )
 
     val cleanedData =
       if (getDataElementType(element.getNodeName) == DataElementType.StringDataElement && container.data != None) {
@@ -302,13 +304,9 @@ trait BaseParser
               -1L
 
           val hash = calculateDataElementStorageHash(currentId, sequenceData.toList)
-          val data = ParserDataContainer(
-            data = "",
-            elementId = currentId,
-            dfasdlId = None,
-            sequenceRowCounter = grandParentSequenceRowCounter,
-            dataElementHash = Option(hash)
-          )
+          val data = ParserDataContainer.createEmpty(Option(hash))(grandParentSequenceRowCounter)(
+            None
+          )(currentId)
           save(data, hash, Option(referenceId))
         } else {
           state.add(currentNode)
@@ -539,16 +537,19 @@ trait BaseParser
       else
         None
 
+    val createContainer: (ParserData) => ParserDataContainer =
+      ParserDataContainer.create(None)(rowCount.getOrElse(-1L))(None)(
+        structureElement.getAttribute("id")
+      )
+    val emptyContainer = ParserDataContainer.createEmpty(None)(rowCount.getOrElse(-1L))(None)(
+      structureElement.getAttribute("id")
+    )
     val dataContainer =
       subParserResponse.elementType match {
         case DataElementType.BinaryDataElement =>
-          ParserDataContainer(data = subParserResponse.data.getOrElse(None),
-                              elementId = structureElement.getAttribute("id"),
-                              sequenceRowCounter = rowCount.getOrElse(-1L))
+          subParserResponse.data.fold(emptyContainer)(createContainer)
         case DataElementType.StringDataElement =>
-          ParserDataContainer(data = subParserResponse.data.getOrElse(None),
-                              elementId = structureElement.getAttribute("id"),
-                              sequenceRowCounter = rowCount.getOrElse(-1L))
+          subParserResponse.data.fold(emptyContainer)(createContainer)
         case DataElementType.UnknownElement =>
           throw new RuntimeException("Unknown data element type!")
       }

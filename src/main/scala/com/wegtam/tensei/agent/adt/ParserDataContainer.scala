@@ -63,6 +63,38 @@ object ParserDataContainer {
     )
 
   /**
+    * Create an empty parser data container which holds no data.
+    *
+    * @param dataElementHash    An option to a possibly calculated hash that is used to pinpoint locations of stacked sequence and choice elements.
+    * @param sequenceRowCounter If the element is the child of a sequence the sequence row counter is stored here.
+    * @param dfasdlId           An option to the ID of the DFASDL which defaults to `None`.
+    * @param elementId          The ID of the DFASDL element that describes the data.
+    * @return An empty parser data container.
+    */
+  def createEmpty(dataElementHash: Option[Long])(
+      sequenceRowCounter: Long
+  )(dfasdlId: Option[String])(elementId: String): ParserDataContainer =
+    ParserDataContainer(
+      data = None,
+      elementId = elementId,
+      dfasdlId = dfasdlId,
+      sequenceRowCounter = sequenceRowCounter,
+      dataElementHash = dataElementHash
+    )
+
+  /**
+    * Create an empty parser data container using defaults for the unspecified fields which holds no data.
+    *
+    * @param elementId The ID of the DFASDL element that describes the data.
+    * @param data      The actual data.
+    * @return A parser data container.
+    */
+  def createEmptyWithDefaults(elementId: String)(data: ParserData): ParserDataContainer =
+    createEmpty(DEFAULT_DATA_ELEMENT_HASH)(DEFAULT_SEQUENCE_ROW_COUNTER)(DEFAULT_DFASDL_ID)(
+      elementId
+    )
+
+  /**
     * Create a parser data container using defaults for the unspecified fields.
     *
     * @param elementId The ID of the DFASDL element that describes the data.
