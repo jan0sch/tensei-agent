@@ -17,6 +17,9 @@
 
 package com.wegtam.tensei.agent.adt.types
 
+import java.math.BigDecimal
+import java.time.{ LocalDate, LocalTime, OffsetDateTime }
+
 import akka.util.ByteString
 import org.dfasdl.utils.types._
 
@@ -24,6 +27,83 @@ import org.dfasdl.utils.types._
   * Provide implicits for several usecases (like typeclasses).
   */
 object implicits {
+
+  /**
+    * Provide wrapper operations for data types to be wrapped into the appropriate
+    * parser data type.
+    *
+    * @tparam T The data type.
+    */
+  trait WrapperOps[T] {
+
+    /**
+      * Construct a parser data type wrapper from the given input.
+      *
+      * This function will throw an exception if the given input could not
+      * be wrapped!
+      *
+      * @param t An arbitrary input data type.
+      * @return An appropriate parser data type wrapper.
+      */
+    def wrap(t: T): ParserData
+
+  }
+
+  /**
+    * Wrap big decimals.
+    */
+  implicit object BigDecimalWrapper extends WrapperOps[BigDecimal] {
+    override def wrap(t: BigDecimal): ParserData = DecimalData(t)
+  }
+
+  /**
+    * Wrap byte arrays.
+    */
+  implicit object ByteArrayWrapper extends WrapperOps[Array[Byte]] {
+    override def wrap(t: Array[Byte]): ParserData = BinaryData(t)
+  }
+
+  /**
+    * Wrap bytestrings.
+    */
+  implicit object ByteStringWrapper extends WrapperOps[ByteString] {
+    override def wrap(t: ByteString): ParserData = StringData(t)
+  }
+
+  /**
+    * Wrap local dates.
+    */
+  implicit object LocalDateWrapper extends WrapperOps[LocalDate] {
+    override def wrap(t: LocalDate): ParserData = DateData(t)
+  }
+
+  /**
+    * Wrap local times.
+    */
+  implicit object LocalTimeWrapper extends WrapperOps[LocalTime] {
+    override def wrap(t: LocalTime): ParserData = TimeData(t)
+  }
+
+  /**
+    * Wrap long numbers.
+    */
+  implicit object LongWrapper extends WrapperOps[Long] {
+    override def wrap(t: Long): ParserData = IntegerData(t)
+  }
+
+  /**
+    * Wrap offset datetime.
+    */
+  implicit object OffsetDateTimeWrapper extends WrapperOps[OffsetDateTime] {
+    override def wrap(t: OffsetDateTime): ParserData = TimestampData(t)
+  }
+
+  /**
+    * Wrap strings.
+    */
+  implicit object StringWrapper extends WrapperOps[String] {
+    override def wrap(t: String): ParserData = StringData(ByteString(t))
+  }
 
   /**
     * Provide operations on DFASDL [[org.dfasdl.utils.types.DataElement]] types.

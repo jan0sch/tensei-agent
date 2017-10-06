@@ -18,6 +18,7 @@
 package com.wegtam.tensei.agent.adt
 
 import com.wegtam.tensei.agent.adt.BaseParserResponseStatus.BaseParserResponseStatusType
+import com.wegtam.tensei.agent.adt.types.ParserData
 import org.dfasdl.utils.DataElementType.DataElementType
 
 /**
@@ -29,8 +30,70 @@ import org.dfasdl.utils.DataElementType.DataElementType
   * @param status      A status message.
   */
 final case class BaseParserResponse(
-    data: Option[AnyRef],
+    data: Option[ParserData],
     elementType: DataElementType,
-    offset: Long = 0,
-    status: BaseParserResponseStatusType = BaseParserResponseStatus.OK
+    offset: Long,
+    status: BaseParserResponseStatusType
 )
+
+object BaseParserResponse {
+  final val DEFAULT_OFFSET: Long                         = 0L
+  final val DEFAULT_STATUS: BaseParserResponseStatusType = BaseParserResponseStatus.OK
+
+  /**
+    * Create a base parser response.
+    *
+    * @param status      A status message.
+    * @param offset      The last offset in the data stream.
+    * @param elementType The specific type of the data element (e.g. StringDataType or BinaryDataElement).
+    * @param data        The data that was read.
+    * @return A base parser response.
+    */
+  def create(
+      status: BaseParserResponseStatusType
+  )(offset: Long)(elementType: DataElementType)(data: ParserData): BaseParserResponse =
+    BaseParserResponse(
+      data = Option(data),
+      elementType = elementType,
+      offset = offset,
+      status = status
+    )
+
+  /**
+    * Create an empty base parser response which holds no data.
+    *
+    * @param status      A status message.
+    * @param offset      The last offset in the data stream.
+    * @param elementType The specific type of the data element (e.g. StringDataType or BinaryDataElement).
+    * @return An empty base parser response.
+    */
+  def createEmpty(
+      status: BaseParserResponseStatusType
+  )(offset: Long)(elementType: DataElementType): BaseParserResponse =
+    BaseParserResponse(
+      data = None,
+      elementType = elementType,
+      offset = offset,
+      status = status
+    )
+
+  /**
+    * Create an empty base parser response which holds no data using defaults for unspecified fields.
+    *
+    * @param elementType The specific type of the data element (e.g. StringDataType or BinaryDataElement).
+    * @return An empty base parser response.
+    */
+  def createEmptyWithDefaults(elementType: DataElementType): BaseParserResponse =
+    createEmpty(DEFAULT_STATUS)(DEFAULT_OFFSET)(elementType)
+
+  /**
+    * Create a base parser response using defaults for unspecified fields.
+    *
+    * @param elementType The specific type of the data element (e.g. StringDataType or BinaryDataElement).
+    * @param data        The data that was read.
+    * @return A base parser response.
+    */
+  def createWithDefaults(elementType: DataElementType)(data: ParserData): BaseParserResponse =
+    create(DEFAULT_STATUS)(DEFAULT_OFFSET)(elementType)(data)
+
+}

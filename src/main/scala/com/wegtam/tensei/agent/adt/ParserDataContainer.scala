@@ -22,14 +22,14 @@ import com.wegtam.tensei.agent.adt.types._
 /**
   * A container class for parsed data.
   *
-  * @param data               The actual data.
+  * @param data               An option to the actual data.
   * @param elementId          The ID of the DFASDL element that describes the data.
   * @param dfasdlId           An option to the ID of the DFASDL which defaults to `None`.
   * @param sequenceRowCounter If the element is the child of a sequence the sequence row counter is stored here.
   * @param dataElementHash    An option to a possibly calculated hash that is used to pinpoint locations of stacked sequence and choice elements.
   */
 final case class ParserDataContainer(
-    data: ParserData,
+    data: Option[ParserData],
     elementId: String,
     dfasdlId: Option[String],
     sequenceRowCounter: Long,
@@ -55,7 +55,7 @@ object ParserDataContainer {
       sequenceRowCounter: Long
   )(dfasdlId: Option[String])(elementId: String)(data: ParserData): ParserDataContainer =
     ParserDataContainer(
-      data = data,
+      data = Option(data),
       elementId = elementId,
       dfasdlId = dfasdlId,
       sequenceRowCounter = sequenceRowCounter,

@@ -29,6 +29,31 @@ import akka.util.ByteString
   */
 sealed trait ParserData extends Product with Serializable
 
+object ParserData {
+
+  /**
+    * Construct a parser data type wrapper from the given input.
+    *
+    * This function will throw an exception if the given input could not
+    * be wrapped!
+    *
+    * @param a An arbitrary input data type.
+    * @return An appropriate parser data type wrapper.
+    */
+  @throws[MatchError]("The given data type could not be mapped to an appropriate ParserData type!")
+  def wrap(a: Any): ParserData = a match {
+    case ar: Array[Byte]    => BinaryData(ar)
+    case ld: LocalDate      => DateData(ld)
+    case de: BigDecimal     => DecimalData(de)
+    case ln: Long           => IntegerData(ln)
+    case bs: ByteString     => StringData(bs)
+    case st: String         => StringData(ByteString(st))
+    case lt: LocalTime      => TimeData(lt)
+    case ot: OffsetDateTime => TimestampData(ot)
+  }
+
+}
+
 /**
   * A wrapper for binary data.
   *
