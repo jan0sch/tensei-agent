@@ -17,6 +17,12 @@
 
 package com.wegtam.tensei.agent.adt
 
+import java.math.BigDecimal
+import java.time.{ LocalDate, LocalTime, OffsetDateTime }
+
+import akka.util.ByteString
+import com.wegtam.tensei.agent.adt.types._
+
 /**
   * A container class for parsed data.
   *
@@ -27,9 +33,55 @@ package com.wegtam.tensei.agent.adt
   * @param dataElementHash     An option to a possibly calculated hash that is used to pinpoint locations of stacked sequence and choice elements.
   */
 final case class ParserDataContainer(
-    data: Any,
+    data: ParserData,
     elementId: String,
     dfasdlId: Option[String] = None,
     sequenceRowCounter: Long = -1L,
     dataElementHash: Option[Long] = None
 )
+
+object ParserDataContainer {
+
+  /**
+    * This is a helper function intended to create a parser data container
+    * from arbitrary data.
+    *
+    * @param a                  An arbitrary data type.
+    * @param elementId          The ID of the DFASDL element that describes the data.
+    * @param dfasdlId           An option to the ID of the DFASDL which defaults to `None`.
+    * @param sequenceRowCounter If the element is the child of a sequence the sequence row counter is stored here.
+    * @param dataElementHash    An option to a possibly calculated hash that is used to pinpoint locations of stacked sequence and choice elements.
+    * @return
+    */
+  @deprecated("Please do not use this function. Create the ParserDataContainer properly instead!",
+              "1.13.3")
+  @throws[MatchError](
+    "The provided input data could not be matched to an appropriate ParserData type!"
+  )
+  def createFromAny(
+      a: Any,
+      elementId: String,
+      dfasdlId: Option[String],
+      sequenceRowCounter: Long,
+      dataElementHash: Option[Long]
+  ): ParserDataContainer = {
+    val data: ParserData = a match {
+      case ar: Array[Byte]    => BinaryData(ar)
+      case ld: LocalDate      => DateData(ld)
+      case bd: BigDecimal     => DecimalData(bd)
+      case nu: Long           => IntegerData(nu)
+      case bs: ByteString     => StringData(bs)
+      case st: String         => StringData(ByteString(st))
+      case lt: LocalTime      => TimeData(lt)
+      case ot: OffsetDateTime => TimestampData(ot)
+    }
+    ParserDataContainer(
+      data = data,
+      elementId = elementId,
+      dfasdlId = dfasdlId,
+      sequenceRowCounter = sequenceRowCounter,
+      dataElementHash = dataElementHash
+    )
+  }
+
+}
