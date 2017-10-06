@@ -17,64 +17,43 @@
 
 package com.wegtam.tensei.agent.adt
 
-import java.math.BigDecimal
-import java.time.{ LocalDate, LocalTime, OffsetDateTime }
-
-import akka.util.ByteString
 import com.wegtam.tensei.agent.adt.types._
 
 /**
   * A container class for parsed data.
   *
-  * @param data                The actual data.
-  * @param elementId           The ID of the DFASDL element that describes the data.
-  * @param dfasdlId            An option to the ID of the DFASDL which defaults to `None`.
-  * @param sequenceRowCounter  If the element is the child of a sequence the sequence row counter is stored here.
-  * @param dataElementHash     An option to a possibly calculated hash that is used to pinpoint locations of stacked sequence and choice elements.
+  * @param data               The actual data.
+  * @param elementId          The ID of the DFASDL element that describes the data.
+  * @param dfasdlId           An option to the ID of the DFASDL which defaults to `None`.
+  * @param sequenceRowCounter If the element is the child of a sequence the sequence row counter is stored here.
+  * @param dataElementHash    An option to a possibly calculated hash that is used to pinpoint locations of stacked sequence and choice elements.
   */
 final case class ParserDataContainer(
     data: ParserData,
     elementId: String,
-    dfasdlId: Option[String] = None,
-    sequenceRowCounter: Long = -1L,
-    dataElementHash: Option[Long] = None
+    dfasdlId: Option[String],
+    sequenceRowCounter: Long,
+    dataElementHash: Option[Long]
 )
 
 object ParserDataContainer {
+  final val DEFAULT_DATA_ELEMENT_HASH: Option[Long] = None
+  final val DEFAULT_DFASDL_ID: Option[String]       = None
+  final val DEFAULT_SEQUENCE_ROW_COUNTER: Long      = -1L
 
   /**
-    * This is a helper function intended to create a parser data container
-    * from arbitrary data.
+    * Create parser data container.
     *
-    * @param a                  An arbitrary data type.
-    * @param elementId          The ID of the DFASDL element that describes the data.
-    * @param dfasdlId           An option to the ID of the DFASDL which defaults to `None`.
-    * @param sequenceRowCounter If the element is the child of a sequence the sequence row counter is stored here.
-    * @param dataElementHash    An option to a possibly calculated hash that is used to pinpoint locations of stacked sequence and choice elements.
-    * @return
+    * @param dataElementHash     An option to a possibly calculated hash that is used to pinpoint locations of stacked sequence and choice elements.
+    * @param sequenceRowCounter  If the element is the child of a sequence the sequence row counter is stored here.
+    * @param dfasdlId            An option to the ID of the DFASDL which defaults to `None`.
+    * @param elementId           The ID of the DFASDL element that describes the data.
+    * @param data                The actual data.
+    * @return A parser data container.
     */
-  @deprecated("Please do not use this function. Create the ParserDataContainer properly instead!",
-              "1.13.3")
-  @throws[MatchError](
-    "The provided input data could not be matched to an appropriate ParserData type!"
-  )
-  def createFromAny(
-      a: Any,
-      elementId: String,
-      dfasdlId: Option[String],
-      sequenceRowCounter: Long,
-      dataElementHash: Option[Long]
-  ): ParserDataContainer = {
-    val data: ParserData = a match {
-      case ar: Array[Byte]    => BinaryData(ar)
-      case ld: LocalDate      => DateData(ld)
-      case bd: BigDecimal     => DecimalData(bd)
-      case nu: Long           => IntegerData(nu)
-      case bs: ByteString     => StringData(bs)
-      case st: String         => StringData(ByteString(st))
-      case lt: LocalTime      => TimeData(lt)
-      case ot: OffsetDateTime => TimestampData(ot)
-    }
+  def create(dataElementHash: Option[Long])(
+      sequenceRowCounter: Long
+  )(dfasdlId: Option[String])(elementId: String)(data: ParserData): ParserDataContainer =
     ParserDataContainer(
       data = data,
       elementId = elementId,
@@ -82,6 +61,17 @@ object ParserDataContainer {
       sequenceRowCounter = sequenceRowCounter,
       dataElementHash = dataElementHash
     )
-  }
+
+  /**
+    * Create a parser data container using defaults for the unspecified fields.
+    *
+    * @param elementId The ID of the DFASDL element that describes the data.
+    * @param data      The actual data.
+    * @return A parser data container.
+    */
+  def createWithDefaults(elementId: String)(data: ParserData): ParserDataContainer =
+    create(DEFAULT_DATA_ELEMENT_HASH)(DEFAULT_SEQUENCE_ROW_COUNTER)(DEFAULT_DFASDL_ID)(elementId)(
+      data
+    )
 
 }
