@@ -28,6 +28,7 @@ import com.jcraft.jsch.Session
 import com.wegtam.tensei.adt.{ ConnectionInformation, Cookbook }
 import com.wegtam.tensei.agent.DataTreeDocument.DataTreeDocumentMessages
 import com.wegtam.tensei.agent.adt._
+import com.wegtam.tensei.agent.adt.types.wrappers._
 import com.wegtam.tensei.agent.helpers.{ LoggingHelpers, NetworkFileHelpers }
 import com.wegtam.tensei.agent.parsers.NetworkFileParser.{
   ExtractDataWithRegExResponse,
@@ -72,7 +73,7 @@ object NetworkFileParser {
             cookbook: Cookbook,
             dataTreeRef: ActorRef,
             agentRunIdentifier: Option[String]): Props =
-    Props(classOf[NetworkFileParser], source, cookbook, dataTreeRef, agentRunIdentifier)
+    Props(new NetworkFileParser(source, cookbook, dataTreeRef, agentRunIdentifier))
 }
 
 /**
@@ -109,7 +110,8 @@ class NetworkFileParser(source: ConnectionInformation,
 
   var defaultEncoding: Charset = Charsets.UTF_8
 
-  def receive = {
+  @SuppressWarnings(Array("org.wartremover.warts.Any"))
+  def receive: Receive = {
     case BaseParserMessages.SubParserInitialize =>
       log.info("Initialize the NetworkFileParser")
       initializeInputStream()
@@ -299,17 +301,16 @@ class NetworkFileParser(source: ConnectionInformation,
           s"?)(${options.stop_sign})"
       }
 
-    options.isInChoice match {
-      case true =>
-        if (options.start_sign.isEmpty)
-          s"(?ms)(.*$stop_sign".r
-        else
-          s"(?ms)(${options.start_sign}.*$stop_sign".r
-      case false =>
-        if (options.start_sign.isEmpty)
-          s"(?ms)(.*$stop_sign".r
-        else
-          s"(?ms)(${options.start_sign}.*$stop_sign".r
+    if (options.isInChoice) {
+      if (options.start_sign.isEmpty)
+        s"(?ms)(.*$stop_sign".r
+      else
+        s"(?ms)(${options.start_sign}.*$stop_sign".r
+    } else {
+      if (options.start_sign.isEmpty)
+        s"(?ms)(.*$stop_sign".r
+      else
+        s"(?ms)(${options.start_sign}.*$stop_sign".r
     }
   }
 
@@ -484,14 +485,13 @@ class NetworkFileParser(source: ConnectionInformation,
       else
         offset + matchedElement.length + matchedStopSign.length
 
-    if (matchedElement.length > 0) {
+    if (matchedElement.nonEmpty) {
       src.reset()
-      BaseParserResponse(Option(matchedElement),
-                         DataElementType.BinaryDataElement,
-                         lastOffset,
-                         status)
+      BaseParserResponse.create(status)(lastOffset)(DataElementType.BinaryDataElement)(
+        matchedElement.wrap
+      )
     } else
-      BaseParserResponse(None, DataElementType.BinaryDataElement, lastOffset, status)
+      BaseParserResponse.createEmpty(status)(lastOffset)(DataElementType.BinaryDataElement)
   }
 
   private def readNextStringElement(
@@ -500,32 +500,37 @@ class NetworkFileParser(source: ConnectionInformation,
       options: NetworkFileParserReadElementOptions
   ): BaseParserResponse = {
     val response = readNextByteElement(src, offset, options)
-    if (response.status != BaseParserResponseStatus.ERROR) {
-      val e =
-        if (response.data.isDefined) {
-          val bytes: Array[Byte] = response.data.get.asInstanceOf[Array[Byte]]
-          if (options.format.isEmpty)
-            Option(new String(bytes, options.encoding))
-          else {
-            val tmpString = new String(bytes, options.encoding)
-            val pattern   = s"(?s)${options.format}".r
-            val m         = pattern.findFirstMatchIn(tmpString)
-            if (m.isDefined)
-              if (m.get.groupCount > 0)
-                Option(m.get.group(1))
-              else {
-                log.warning("No data could be extracted using element format '{}'!", options.format)
-                None
-              } else {
-              log.warning("Format '{}' did not match for parsed element!", options.format)
-              None
-            }
-          }
-        } else
-          None
+    val emptyResponse = BaseParserResponse.createEmpty(response.status)(response.offset)(
+      DataElementType.StringDataElement
+    )
 
-      BaseParserResponse(e, DataElementType.StringDataElement, response.offset, response.status)
-    } else
-      BaseParserResponse(None, DataElementType.StringDataElement, response.offset, response.status)
+    val e: Option[String] =
+      if (response.status != BaseParserResponseStatus.ERROR && response.data.nonEmpty) {
+        val bytes: Array[Byte] = response.data.get.asInstanceOf[Array[Byte]]
+        if (options.format.isEmpty)
+          Option(new String(bytes, options.encoding))
+        else {
+          val tmpString = new String(bytes, options.encoding)
+          val pattern   = s"(?s)${options.format}".r
+          val m         = pattern.findFirstMatchIn(tmpString)
+          if (m.isDefined)
+            if (m.get.groupCount > 0)
+              Option(m.get.group(1))
+            else {
+              log.warning("No data could be extracted using element format '{}'!", options.format)
+              None
+            } else {
+            log.warning("Format '{}' did not match for parsed element!", options.format)
+            None
+          }
+        }
+      } else
+        None
+
+    e.fold(emptyResponse)(
+      d =>
+        BaseParserResponse
+          .create(response.status)(response.offset)(DataElementType.StringDataElement)(d.wrap)
+    )
   }
 }
