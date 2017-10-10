@@ -27,6 +27,7 @@ import com.google.common.base.Charsets
 import com.wegtam.tensei.adt.{ ConnectionInformation, Cookbook, DFASDLReference }
 import com.wegtam.tensei.agent.DataTreeDocument.DataTreeDocumentMessages
 import com.wegtam.tensei.agent.adt._
+import com.wegtam.tensei.agent.adt.types.wrappers._
 import com.wegtam.tensei.agent.helpers.{ DatabaseHelpers, LoggingHelpers }
 import com.wegtam.tensei.agent.parsers.DatabaseParser.DatabaseParserCursorState
 import org.dfasdl.utils.{ AttributeNames, DataElementType, ElementNames, StructureElementType }
@@ -342,17 +343,19 @@ class DatabaseParser(source: ConnectionInformation,
             }
           }
         log.debug("Parsed element {} with data: >{}<.", structureElement.getAttribute("id"), data)
-        BaseParserResponse(data, DataElementType.StringDataElement)
+        data.fold(BaseParserResponse.createEmptyWithDefaults(DataElementType.StringDataElement))(
+          d => BaseParserResponse.createWithDefaults(DataElementType.StringDataElement)(d.wrap)
+        )
       } else {
         val doneCursors = cursors.count(_._2 == DatabaseParserCursorState.Done)
         if (doneCursors == cursors.size)
-          BaseParserResponse(data = None,
-                             elementType = DataElementType.StringDataElement,
-                             status = BaseParserResponseStatus.END_OF_DATA)
+          BaseParserResponse
+            .createEmptyWithDefaults(DataElementType.StringDataElement)
+            .copy(status = BaseParserResponseStatus.END_OF_DATA)
         else
-          BaseParserResponse(data = None,
-                             elementType = DataElementType.StringDataElement,
-                             status = BaseParserResponseStatus.END_OF_SEQUENCE)
+          BaseParserResponse
+            .createEmptyWithDefaults(DataElementType.StringDataElement)
+            .copy(status = BaseParserResponseStatus.END_OF_SEQUENCE)
       }
 
     response
