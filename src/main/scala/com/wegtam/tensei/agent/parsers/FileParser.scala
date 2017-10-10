@@ -98,7 +98,7 @@ class FileParser(
   override def readDataElement(structureElement: Element,
                                useOffset: Long = -1,
                                isInChoice: Boolean = false): BaseParserResponse = {
-    implicit val loggingAdapter = log
+    implicit val loggingAdapter: DiagnosticLoggingAdapter = log
 
     // Reset offset if desired
     if (useOffset > -1) currentOffset = useOffset

@@ -122,52 +122,19 @@ object implicits {
   }
 
   /**
-    * Operations on [[org.dfasdl.utils.types.BinaryE]] elements.
+    * Implementation of the conversion of a DFASDL data element into a
+    * [[com.wegtam.tensei.agent.adt.types.ParserData]] element.
     */
-  implicit object BinaryElementOps extends DfasdlDataElementOps[BinaryE] {
-    override def toParserData(t: BinaryE): ParserData = BinaryData(t.v)
-  }
-
-  /**
-    * Operations on [[org.dfasdl.utils.types.DecimalE]] elements.
-    */
-  implicit object DecimalElementOps extends DfasdlDataElementOps[DecimalE] {
-    override def toParserData(t: DecimalE): ParserData = DecimalData(t.v)
-  }
-
-  /**
-    * Operations on [[org.dfasdl.utils.types.IntegerE]] elements.
-    */
-  implicit object IntegerElementOps extends DfasdlDataElementOps[IntegerE] {
-    override def toParserData(t: IntegerE): ParserData = IntegerData(t.v)
-  }
-
-  /**
-    * Operations on [[org.dfasdl.utils.types.LocalDateE]] elements.
-    */
-  implicit object LocalDateElementOps extends DfasdlDataElementOps[LocalDateE] {
-    override def toParserData(t: LocalDateE): ParserData = DateData(t.v)
-  }
-
-  /**
-    * Operations on [[org.dfasdl.utils.types.LocalTimeE]] elements.
-    */
-  implicit object LocalTimeElementOps extends DfasdlDataElementOps[LocalTimeE] {
-    override def toParserData(t: LocalTimeE): ParserData = TimeData(t.v)
-  }
-
-  /**
-    * Operations on [[org.dfasdl.utils.types.OffsetDateTimeE]] elements.
-    */
-  implicit object OffsetDateTimeElementOps extends DfasdlDataElementOps[OffsetDateTimeE] {
-    override def toParserData(t: OffsetDateTimeE): ParserData = TimestampData(t.v)
-  }
-
-  /**
-    * Operations on [[org.dfasdl.utils.types.StringE]] elements.
-    */
-  implicit object StringElementOps extends DfasdlDataElementOps[StringE] {
-    override def toParserData(t: StringE): ParserData = StringData(ByteString(t.v))
+  implicit object DfasdlDataElementOps extends DfasdlDataElementOps[DataElement] {
+    override def toParserData(t: DataElement): ParserData = t match {
+      case BinaryE(v)         => BinaryData(v)
+      case DecimalE(v)        => DecimalData(v)
+      case IntegerE(v)        => IntegerData(v)
+      case LocalDateE(v)      => DateData(v)
+      case LocalTimeE(v)      => TimeData(v)
+      case OffsetDateTimeE(v) => TimestampData(v)
+      case StringE(v)         => StringData(ByteString(v))
+    }
   }
 
 }

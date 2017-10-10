@@ -20,11 +20,11 @@ package com.wegtam.tensei.agent.parsers
 import javax.xml.xpath.{ XPathConstants, XPathFactory }
 
 import akka.event.DiagnosticLoggingAdapter
-import akka.util.ByteString
 import cats.implicits._
 import com.wegtam.tensei.adt.{ Cookbook, DFASDLReference }
 import com.wegtam.tensei.agent.adt.BaseParserResponseStatus.{ END_OF_DATA, END_OF_SEQUENCE }
-import com.wegtam.tensei.agent.adt.types.ParserData
+import com.wegtam.tensei.agent.adt.types.syntax._
+import com.wegtam.tensei.agent.adt.types.{ ParserData, StringData }
 import com.wegtam.tensei.agent.adt.{
   BaseParserChoiceStatus,
   BaseParserResponse,
@@ -35,6 +35,7 @@ import com.wegtam.tensei.agent.exceptions.{ BaseParserFormatException, DataParse
 import com.wegtam.tensei.agent.helpers.{ GenericHelpers, XmlHelpers }
 import org.dfasdl.utils._
 import org.dfasdl.utils.exceptions.{ DataElementValidationException, LengthValidationException }
+import org.slf4j.LoggerFactory
 import org.w3c.dom.traversal.{ DocumentTraversal, NodeFilter, TreeWalker }
 import org.w3c.dom.{ Document, Element, Node, NodeList }
 
@@ -49,6 +50,8 @@ trait BaseParser
     with DataElementExtractors
     with XmlHelpers
     with GenericHelpers {
+  private val log = LoggerFactory.getLogger("BaseParser")
+
   val DEFAULT_STOP_SIGN = "\r\n?|\n"
 
   val state = new BaseParserState
@@ -124,43 +127,32 @@ trait BaseParser
         .getAttribute("id")})!"
     )
 
-    val cleanedData =
-      if (getDataElementType(element.getNodeName) == DataElementType.StringDataElement && container.data != None) {
-        val rawDataString = container.data.asInstanceOf[String]
-        val processedData =
-          element.getNodeName match {
-            case ElementNames.FORMATTED_NUMBER =>
-              processFormattedNumberData(rawDataString, element)
-            case ElementNames.FORMATTED_STRING => processStringData(rawDataString, element)
-            case ElementNames.NUMBER           => processNumberData(rawDataString, element)
-            case ElementNames.STRING           => processStringData(rawDataString, element)
-            case _                             => rawDataString
-          }
-        if (processedData.isEmpty)
-          processedData
-        else
-          extractData(processedData, element) match {
-            case scala.util.Failure(e) =>
-              element.getTagName match {
-                case ElementNames.DATETIME => java.time.OffsetDateTime.parse(DEFAULT_DATETIME)
-                case ElementNames.DATE     => java.time.LocalDate.parse(DEFAULT_DATE)
-                case _ =>
-                  throw BaseParserFormatException.create(
-                    s"Format exception on element: ${element.getAttribute("id")} in DFASDL: ${container.dfasdlId}",
-                    e
-                  )
-              }
-            case scala.util.Success(d) =>
-              element.getTagName match {
-                case ElementNames.FORMATTED_STRING | ElementNames.STRING =>
-                  ByteString(d.asInstanceOf[String]) // Convert String to ByteString
-                case _ => d
-              }
-          }
-      } else
-        container.data
-
-    container.copy(data = cleanedData)
+    getDataElementType(element.getNodeName) match {
+      case DataElementType.StringDataElement =>
+        container.data.fold(container) {
+          case StringData(d) =>
+            val s = d.utf8String
+            val ps = element.getNodeName match {
+              case ElementNames.FORMATTED_NUMBER => processFormattedNumberData(s, element)
+              case ElementNames.FORMATTED_STRING => processStringData(s, element)
+              case ElementNames.NUMBER           => processNumberData(s, element)
+              case ElementNames.STRING           => processStringData(s, element)
+              case _                             => s
+            }
+            extractData(ps, element) match {
+              case scala.util.Failure(f) =>
+                log.error(
+                  "An error occured during data extraction in clean and validate data phase!",
+                  f
+                )
+                throw new BaseParserFormatException(
+                  "Could not extract correct data type from parser data!"
+                )
+              case scala.util.Success(de) => container.copy(data = Option(de.toParserData))
+            }
+        }
+      case _ => container
+    }
   }
 
   /**

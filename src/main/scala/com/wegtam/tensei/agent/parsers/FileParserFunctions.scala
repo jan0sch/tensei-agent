@@ -23,6 +23,7 @@ import java.nio.charset.Charset
 import akka.event.DiagnosticLoggingAdapter
 import com.google.common.io.ByteSource
 import com.wegtam.tensei.agent.adt.{ BaseParserResponse, BaseParserResponseStatus }
+import com.wegtam.tensei.agent.adt.types.wrappers._
 import com.wegtam.tensei.agent.parsers.FileParserFunctions.ExtractDataWithRegExResponse
 import org.dfasdl.utils.DataElementType
 
@@ -250,13 +251,12 @@ trait FileParserFunctions {
       } else
         offset + matchedElement.length + matchedStopSign.length
 
-    if (matchedElement.length > 0)
-      BaseParserResponse(Option(matchedElement),
-                         DataElementType.BinaryDataElement,
-                         lastOffset,
-                         status)
+    if (matchedElement.nonEmpty)
+      BaseParserResponse.create(status)(lastOffset)(DataElementType.BinaryDataElement)(
+        matchedElement.wrap
+      )
     else
-      BaseParserResponse(None, DataElementType.BinaryDataElement, lastOffset, status)
+      BaseParserResponse.createEmpty(status)(lastOffset)(DataElementType.BinaryDataElement)
   }
 
   /**
@@ -278,34 +278,38 @@ trait FileParserFunctions {
       state: BaseParserState
   )(implicit log: DiagnosticLoggingAdapter): BaseParserResponse = {
     val response = readNextByteElement(src, offset, options, defaultStopSign, state)
+    val emptyResponse = BaseParserResponse.createEmpty(response.status)(response.offset)(
+      DataElementType.StringDataElement
+    )
 
-    if (response.status != BaseParserResponseStatus.ERROR) {
-      val e =
-        if (response.data.isDefined) {
-          val bytes: Array[Byte] = response.data.get.asInstanceOf[Array[Byte]]
-          if (options.format.isEmpty)
-            Option(new String(bytes, options.encoding))
-          else {
-            val tmpString = new String(bytes, options.encoding)
-            val pattern   = s"(?s)${options.format}".r
-            val m         = pattern.findFirstMatchIn(tmpString)
-            if (m.isDefined)
-              if (m.get.groupCount > 0)
-                Option(m.get.group(1))
-              else {
-                log.warning("No data could be extracted using element format '{}'!", options.format)
-                None
-              } else {
-              log.warning("Format '{}' did not match for parsed element!", options.format)
+    val e: Option[String] =
+      if (response.status != BaseParserResponseStatus.ERROR && response.data.nonEmpty) {
+        val bytes: Array[Byte] = response.data.get.asInstanceOf[Array[Byte]]
+        if (options.format.isEmpty)
+          Option(new String(bytes, options.encoding))
+        else {
+          val tmpString = new String(bytes, options.encoding)
+          val pattern   = s"(?s)${options.format}".r
+          val m         = pattern.findFirstMatchIn(tmpString)
+          if (m.isDefined)
+            if (m.get.groupCount > 0)
+              Option(m.get.group(1))
+            else {
+              log.warning("No data could be extracted using element format '{}'!", options.format)
               None
-            }
+            } else {
+            log.warning("Format '{}' did not match for parsed element!", options.format)
+            None
           }
-        } else
-          None
+        }
+      } else
+        None
 
-      BaseParserResponse(e, DataElementType.StringDataElement, response.offset, response.status)
-    } else
-      BaseParserResponse(None, DataElementType.StringDataElement, response.offset, response.status)
+    e.fold(emptyResponse)(
+      d =>
+        BaseParserResponse
+          .create(response.status)(response.offset)(DataElementType.StringDataElement)(d.wrap)
+    )
   }
 
 }
