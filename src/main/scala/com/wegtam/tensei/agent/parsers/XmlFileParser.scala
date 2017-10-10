@@ -27,6 +27,7 @@ import com.wegtam.tensei.adt.{ ConnectionInformation, Cookbook }
 import com.wegtam.tensei.agent.DataTreeDocument.DataTreeDocumentMessages
 import com.wegtam.tensei.agent.adt.BaseParserResponseStatus.BaseParserResponseStatusType
 import com.wegtam.tensei.agent.adt._
+import com.wegtam.tensei.agent.adt.types.wrappers._
 import com.wegtam.tensei.agent.helpers.LoggingHelpers
 import org.dfasdl.utils.{ AttributeNames, DataElementType, ElementNames }
 import org.w3c.dom.traversal.{ DocumentTraversal, NodeFilter, TreeWalker }
@@ -52,7 +53,7 @@ object XmlFileParser {
             cookbook: Cookbook,
             dataTreeRef: ActorRef,
             agentRunIdentifier: Option[String]): Props =
-    Props(classOf[XmlFileParser], source, cookbook, dataTreeRef, agentRunIdentifier)
+    Props(new XmlFileParser(source, cookbook, dataTreeRef, agentRunIdentifier))
 
 }
 
@@ -377,10 +378,14 @@ class XmlFileParser(source: ConnectionInformation,
               data,
               myWrapper.getOffset,
               dataStatus)
-    BaseParserResponse(data,
-                       DataElementType.StringDataElement,
-                       myWrapper.getOffset.toLong,
-                       dataStatus)
+    data.fold(
+      BaseParserResponse
+        .createEmpty(dataStatus)(myWrapper.getOffset.toLong)(DataElementType.StringDataElement)
+    )(
+      d =>
+        BaseParserResponse
+          .create(dataStatus)(myWrapper.getOffset.toLong)(DataElementType.StringDataElement)(d.wrap)
+    )
   }
 
   override def parseDataElementExceptionHandler(
