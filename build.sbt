@@ -261,6 +261,7 @@ lazy val commonSettings =
     organization := "com.wegtam.tensei",
     git.useGitDescribe := true,
     scalaVersion in ThisBuild := "2.11.11",
+    crossScalaVersions := Seq(scalaVersion.value),
     scalacOptions ++= Seq(
       "-deprecation",
       "-encoding", "UTF-8",
