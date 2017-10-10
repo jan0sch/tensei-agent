@@ -24,6 +24,7 @@ import argonaut._
 import com.wegtam.tensei.adt._
 import com.wegtam.tensei.agent.DataTreeDocument.DataTreeDocumentMessages
 import com.wegtam.tensei.agent.adt._
+import com.wegtam.tensei.agent.adt.types.wrappers._
 import com.wegtam.tensei.agent.helpers.LoggingHelpers
 import org.dfasdl.utils._
 import org.w3c.dom.Element
@@ -46,7 +47,7 @@ object JsonFileParser {
             cookbook: Cookbook,
             dataTreeRef: ActorRef,
             agentRunIdentifier: Option[String]): Props =
-    Props(classOf[JsonFileParser], source, cookbook, dataTreeRef, agentRunIdentifier)
+    Props(new JsonFileParser(source, cookbook, dataTreeRef, agentRunIdentifier))
 
 }
 
@@ -184,11 +185,9 @@ class JsonFileParser(source: ConnectionInformation,
         getDataElementType(structureElement.getNodeName) match {
           case DataElementType.BinaryDataElement =>
             log.error("Binary data types not supported!")
-            BaseParserResponse(
-              data = None,
-              elementType = DataElementType.BinaryDataElement,
-              status = BaseParserResponseStatus.ERROR
-            )
+            BaseParserResponse
+              .createEmptyWithDefaults(DataElementType.BinaryDataElement)
+              .copy(status = BaseParserResponseStatus.ERROR)
           case DataElementType.StringDataElement =>
             val decodeResult =
               if (structureElement.hasAttribute(AttributeNames.JSON_ATTRIBUTE_NAME))
@@ -225,13 +224,12 @@ class JsonFileParser(source: ConnectionInformation,
                           readError._1,
                           readError._2)
                 log.error("Current json focus: {}", c.focus)
-                BaseParserResponse(
-                  data = None,
-                  elementType = DataElementType.StringDataElement,
-                  status =
-                    if (state.isInSequence) BaseParserResponseStatus.END_OF_DATA
-                    else BaseParserResponseStatus.ERROR
-                )
+                val r =
+                  BaseParserResponse.createEmptyWithDefaults(DataElementType.StringDataElement)
+                if (state.isInSequence)
+                  r.copy(status = BaseParserResponseStatus.END_OF_DATA)
+                else
+                  r.copy(status = BaseParserResponseStatus.ERROR)
               case \/-(data) =>
                 val d = data.toString
                 val status = if (state.isInSequence) {
@@ -260,27 +258,21 @@ class JsonFileParser(source: ConnectionInformation,
                 } else
                   BaseParserResponseStatus.OK
 
-                BaseParserResponse(
-                  data = Option(d),
-                  elementType = DataElementType.StringDataElement,
-                  status = status
-                )
+                BaseParserResponse
+                  .createWithDefaults(DataElementType.StringDataElement)(d.wrap)
+                  .copy(status = status)
             }
           case DataElementType.UnknownElement =>
             log.error("Unknown data element type {}!", structureElement.getNodeName)
-            BaseParserResponse(
-              data = None,
-              elementType = DataElementType.UnknownElement,
-              status = BaseParserResponseStatus.ERROR
-            )
+            BaseParserResponse
+              .createEmptyWithDefaults(DataElementType.UnknownElement)
+              .copy(status = BaseParserResponseStatus.ERROR)
         }
       }
       .getOrElse(
-        BaseParserResponse(
-          data = None,
-          elementType = DataElementType.UnknownElement,
-          status = BaseParserResponseStatus.ERROR
-        )
+        BaseParserResponse
+          .createEmptyWithDefaults(DataElementType.UnknownElement)
+          .copy(status = BaseParserResponseStatus.ERROR)
       )
 
   override def save(data: ParserDataContainer,
@@ -383,6 +375,6 @@ class JsonFileParser(source: ConnectionInformation,
     )
 
     // If the current element has a sibling dfasdl element then we move one field upwards.
-    getSibling(p).foreach(s => cursor = cursor.map(c => c.up))
+    getSibling(p).foreach(_ => cursor = cursor.map(c => c.up))
   }
 }
