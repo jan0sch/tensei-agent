@@ -128,7 +128,7 @@ object TransformationWorker {
     * @return The props to create an actor.
     */
   def props(agentRunIdentifier: Option[String]): Props =
-    Props(classOf[TransformationWorker], agentRunIdentifier)
+    Props(new TransformationWorker(agentRunIdentifier))
 
 }
 
