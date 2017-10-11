@@ -166,7 +166,7 @@ class TransformationWorker(agentRunIdentifier: Option[String])
   startWith(TransformationWorkerState.Idle, TransformationWorkerStateData())
 
   when(TransformationWorkerState.Idle) {
-    case Event(msg: TransformationWorkerMessages.Start, data) =>
+    case Event(msg: TransformationWorkerMessages.Start, _) =>
       log.debug("Received start message.")
       if (msg.transformations.isEmpty) {
         log.debug("No transformations defined. Relaying data to target.")
@@ -178,30 +178,28 @@ class TransformationWorker(agentRunIdentifier: Option[String])
           target = Option(msg.target),
           transformations = msg.transformations
         )
-    case Event(TransformationWorkerMessages.Stop, data) =>
+    case Event(TransformationWorkerMessages.Stop, _) =>
       log.debug("Received stop message in idle state.")
       stop()
   }
 
   when(TransformationWorkerState.Transforming) {
-    case Event(TransformationWorkerMessages.Stop, data) =>
+    case Event(TransformationWorkerMessages.Stop, _) =>
       log.debug("Received stop message in transforming state.")
       stop()
-    case Event(msg: TransformationWorkerMessages.PreparationTimeout, data) =>
+    case Event(msg: TransformationWorkerMessages.PreparationTimeout, _) =>
       log.error("Transformer {} timed out while preparing for transformation!", msg.t)
       stop()
-    case Event(msg: TransformationWorkerMessages.TransformationTimeout, data) =>
+    case Event(msg: TransformationWorkerMessages.TransformationTimeout, _) =>
       log.error("Transformer {} timed out while transforming data!", msg.t)
       stop()
     case Event(BaseTransformer.ReadyToTransform, data) =>
       log.debug("Got ready message from transformer.")
       cancelTimer(prepareTimeoutTimerName)
-      val dataToTransform: List[Any] = data.container.get.data match {
-        case l: List[Any] => l
-        case _            => List(data.container.get.data)
+      (data.container, data.transformations.headOption) match {
+        case (Some(c), Some(o)) => sender() ! BaseTransformer.StartTransformation(c.data, o.options)
+        case _                  => log.warning("No data or transformation options for transformation!")
       }
-      sender() ! BaseTransformer.StartTransformation(dataToTransform,
-                                                     data.transformations.head.options)
       setTimer(
         transformationTimeoutTimerName,
         TransformationWorkerMessages.TransformationTimeout(
@@ -217,10 +215,12 @@ class TransformationWorker(agentRunIdentifier: Option[String])
         log.error("Transformer returned an error status!")
         stop()
       } else {
-        val transformedData = if (msg.data.size > 1) msg.data else msg.data.head
         if (data.transformations.isEmpty) {
           log.debug("No transformations left.")
-          data.target.get ! data.container.get.copy(data = transformedData)
+          data.target match {
+            case None    => log.warning("No target defined for transformation queue end result!")
+            case Some(r) => data.container.foreach(c => r ! c.copy(data = msg.data))
+          }
           stop()
         } else {
           prepareTransformer(data.transformations.head) match {
@@ -228,9 +228,9 @@ class TransformationWorker(agentRunIdentifier: Option[String])
               log.error(failure, "An error occurred while trying to initialise a transformer!")
               stop()
             case \/-(success) =>
-              log.debug("Transformer initialised successfully.")
-              val newContainer = data.container.get.copy(data = transformedData)
-              stay() using data.copy(container = Option(newContainer))
+              log.debug("Transformer initialised successfully at {}.", success.path)
+              val newContainer = data.container.map(_.copy(data = msg.data))
+              stay() using data.copy(container = newContainer)
           }
         }
       }
@@ -243,7 +243,7 @@ class TransformationWorker(agentRunIdentifier: Option[String])
           log.error(failure, "An error occurred while trying to initialise a transformer!")
           self ! TransformationWorkerMessages.Stop
         case \/-(success) =>
-          log.debug("Transformer initialised successfully.")
+          log.debug("Transformer initialised successfully at {}.", success.path)
       }
   }
 

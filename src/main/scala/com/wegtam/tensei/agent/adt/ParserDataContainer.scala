@@ -19,17 +19,19 @@ package com.wegtam.tensei.agent.adt
 
 import com.wegtam.tensei.agent.adt.types._
 
+import scala.collection.immutable.Seq
+
 /**
   * A container class for parsed data.
   *
-  * @param data               An option to the actual data.
+  * @param data               A list with the actual data.
   * @param elementId          The ID of the DFASDL element that describes the data.
   * @param dfasdlId           An option to the ID of the DFASDL which defaults to `None`.
   * @param sequenceRowCounter If the element is the child of a sequence the sequence row counter is stored here.
   * @param dataElementHash    An option to a possibly calculated hash that is used to pinpoint locations of stacked sequence and choice elements.
   */
 final case class ParserDataContainer(
-    data: Option[ParserData],
+    data: Seq[ParserData],
     elementId: String,
     dfasdlId: Option[String],
     sequenceRowCounter: Long,
@@ -53,9 +55,9 @@ object ParserDataContainer {
     */
   def create(dataElementHash: Option[Long])(
       sequenceRowCounter: Long
-  )(dfasdlId: Option[String])(elementId: String)(data: ParserData): ParserDataContainer =
+  )(dfasdlId: Option[String])(elementId: String)(data: ParserData*): ParserDataContainer =
     ParserDataContainer(
-      data = Option(data),
+      data = data.to[Seq],
       elementId = elementId,
       dfasdlId = dfasdlId,
       sequenceRowCounter = sequenceRowCounter,
@@ -75,7 +77,7 @@ object ParserDataContainer {
       sequenceRowCounter: Long
   )(dfasdlId: Option[String])(elementId: String): ParserDataContainer =
     ParserDataContainer(
-      data = None,
+      data = Seq.empty,
       elementId = elementId,
       dfasdlId = dfasdlId,
       sequenceRowCounter = sequenceRowCounter,
@@ -86,10 +88,9 @@ object ParserDataContainer {
     * Create an empty parser data container using defaults for the unspecified fields which holds no data.
     *
     * @param elementId The ID of the DFASDL element that describes the data.
-    * @param data      The actual data.
-    * @return A parser data container.
+    * @return An empty parser data container using default values for unspecified fields.
     */
-  def createEmptyWithDefaults(elementId: String)(data: ParserData): ParserDataContainer =
+  def createEmptyWithDefaults(elementId: String): ParserDataContainer =
     createEmpty(DEFAULT_DATA_ELEMENT_HASH)(DEFAULT_SEQUENCE_ROW_COUNTER)(DEFAULT_DFASDL_ID)(
       elementId
     )
@@ -99,11 +100,11 @@ object ParserDataContainer {
     *
     * @param elementId The ID of the DFASDL element that describes the data.
     * @param data      The actual data.
-    * @return A parser data container.
+    * @return A parser data container using default values for unspecified fields.
     */
-  def createWithDefaults(elementId: String)(data: ParserData): ParserDataContainer =
+  def createWithDefaults(elementId: String)(data: ParserData*): ParserDataContainer =
     create(DEFAULT_DATA_ELEMENT_HASH)(DEFAULT_SEQUENCE_ROW_COUNTER)(DEFAULT_DFASDL_ID)(elementId)(
-      data
+      data: _*
     )
 
 }

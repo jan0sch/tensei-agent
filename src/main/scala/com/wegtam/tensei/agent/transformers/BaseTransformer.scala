@@ -17,12 +17,15 @@
 
 package com.wegtam.tensei.agent.transformers
 
-import akka.actor.{Actor, ActorLogging}
+import akka.actor.{ Actor, ActorLogging }
 import com.wegtam.tensei.adt.TransformerOptions
 import com.wegtam.tensei.agent.adt.TransformerStatus
 import com.wegtam.tensei.agent.adt.TransformerStatus.TransformerStatusType
 import com.wegtam.tensei.agent.adt.types.ParserData
-import com.wegtam.tensei.agent.transformers.BaseTransformer.{PrepareForTransformation, ReadyToTransform}
+import com.wegtam.tensei.agent.transformers.BaseTransformer.{
+  PrepareForTransformation,
+  ReadyToTransform
+}
 
 import scala.collection.immutable.Seq
 import scala.language.existentials
