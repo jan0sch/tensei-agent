@@ -19,18 +19,16 @@ package com.wegtam.tensei.agent.processor
 
 import akka.actor.SupervisorStrategy.Escalate
 import akka.actor._
-import akka.event.{ DiagnosticLoggingAdapter, Logging }
+import akka.event.{DiagnosticLoggingAdapter, Logging}
 import com.wegtam.tensei.adt.TransformationDescription
-import com.wegtam.tensei.agent.adt.{ ParserDataContainer, TransformerStatus }
+import com.wegtam.tensei.agent.adt.types.ParserData
+import com.wegtam.tensei.agent.adt.{ParserDataContainer, TransformerStatus}
 import com.wegtam.tensei.agent.helpers.LoggingHelpers
-import com.wegtam.tensei.agent.processor.TransformationWorker.{
-  TransformationWorkerMessages,
-  TransformationWorkerState,
-  TransformationWorkerStateData
-}
+import com.wegtam.tensei.agent.processor.TransformationWorker.{TransformationWorkerMessages, TransformationWorkerState, TransformationWorkerStateData}
 import com.wegtam.tensei.agent.transformers.BaseTransformer
 import org.w3c.dom.Element
 
+import scala.collection.immutable.Seq
 import scala.concurrent.duration._
 import scalaz._
 
@@ -55,11 +53,11 @@ object TransformationWorker {
       * @param target An actor ref for the actor that should receive the end result.
       * @param transformations A list of transformations that must be applied.
       */
-    case class Start(
+    final case class Start(
         container: ParserDataContainer,
         element: Element,
         target: ActorRef,
-        transformations: List[TransformationDescription]
+        transformations: Seq[TransformationDescription]
     ) extends TransformationWorkerMessages
 
     /**
@@ -113,12 +111,14 @@ object TransformationWorker {
     *
     * @param container A parser data container which holds the data.
     * @param target An actor ref that defines the target actor that shall receive the end result of the transformations.
+    * @param transformationData A list of data which is fed into the transformers.
     * @param transformations The list of transformations to apply.
     */
-  case class TransformationWorkerStateData(
+  final case class TransformationWorkerStateData(
       container: Option[ParserDataContainer] = None,
       target: Option[ActorRef] = None,
-      transformations: List[TransformationDescription] = List.empty[TransformationDescription]
+      transformationData: Seq[ParserData] = Seq.empty,
+      transformations: Seq[TransformationDescription] = Seq.empty
   )
 
   /**
@@ -196,9 +196,8 @@ class TransformationWorker(agentRunIdentifier: Option[String])
     case Event(BaseTransformer.ReadyToTransform, data) =>
       log.debug("Got ready message from transformer.")
       cancelTimer(prepareTimeoutTimerName)
-      (data.container, data.transformations.headOption) match {
-        case (Some(c), Some(o)) => sender() ! BaseTransformer.StartTransformation(c.data, o.options)
-        case _                  => log.warning("No data or transformation options for transformation!")
+      data.transformations.headOption.foreach { t =>
+        sender() ! BaseTransformer.StartTransformation(data.transformationData, t.options)
       }
       setTimer(
         transformationTimeoutTimerName,
@@ -207,7 +206,7 @@ class TransformationWorker(agentRunIdentifier: Option[String])
         ),
         transformationTimeout
       )
-      stay() using data.copy(transformations = data.transformations.tail)
+      stay() using data.copy(transformations = data.transformations.drop(1))
     case Event(msg: BaseTransformer.TransformerResponse, data) =>
       log.debug("Got transformer response.")
       cancelTimer(transformationTimeoutTimerName)
