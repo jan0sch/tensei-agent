@@ -19,12 +19,16 @@ package com.wegtam.tensei.agent.processor
 
 import akka.actor.SupervisorStrategy.Escalate
 import akka.actor._
-import akka.event.{DiagnosticLoggingAdapter, Logging}
+import akka.event.{ DiagnosticLoggingAdapter, Logging }
 import com.wegtam.tensei.adt.TransformationDescription
 import com.wegtam.tensei.agent.adt.types.ParserData
-import com.wegtam.tensei.agent.adt.{ParserDataContainer, TransformerStatus}
+import com.wegtam.tensei.agent.adt.{ ParserDataContainer, TransformerStatus }
 import com.wegtam.tensei.agent.helpers.LoggingHelpers
-import com.wegtam.tensei.agent.processor.TransformationWorker.{TransformationWorkerMessages, TransformationWorkerState, TransformationWorkerStateData}
+import com.wegtam.tensei.agent.processor.TransformationWorker.{
+  TransformationWorkerMessages,
+  TransformationWorkerState,
+  TransformationWorkerStateData
+}
 import com.wegtam.tensei.agent.transformers.BaseTransformer
 import org.w3c.dom.Element
 
