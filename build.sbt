@@ -296,7 +296,7 @@ lazy val scalafmtSettings =
   Seq(
     scalafmtOnCompile := true,
     scalafmtOnCompile.in(Sbt) := false,
-    scalafmtVersion := "1.2.0"
+    scalafmtVersion := "1.3.0"
   )
 // Enable scalafmt for the IntegrationTest scope.
 inConfig(IntegrationTest)(com.lucidchart.sbt.scalafmt.ScalafmtCorePlugin.autoImport.scalafmtSettings)
