@@ -24,6 +24,7 @@ import com.wegtam.tensei.adt.TransformationDescription
 import com.wegtam.tensei.agent.adt.types.ParserData
 import com.wegtam.tensei.agent.adt.{ ParserDataContainer, TransformerStatus }
 import com.wegtam.tensei.agent.helpers.LoggingHelpers
+import com.wegtam.tensei.agent.processor.TransformationWorker.TransformationWorkerMessages.Finished
 import com.wegtam.tensei.agent.processor.TransformationWorker.{
   TransformationWorkerMessages,
   TransformationWorkerState,
@@ -49,16 +50,27 @@ object TransformationWorker {
   object TransformationWorkerMessages {
 
     /**
+      * The end result of a transformation queue is encapsulated within this message.
+      *
+      * @param container The parser data container which held the original data.
+      * @param data The actual data that was generated. This is decoupled from the container because it may be more than one datapoint.
+      */
+    final case class Finished(container: ParserDataContainer, data: Seq[ParserData])
+        extends TransformationWorkerMessages
+
+    /**
       * Instruct the actor to start the transformation sequence for the given data and
       * pipe the result to the specified target.
       *
       * @param container A parser data container holding the data.
+      * @param data The actual data that shall be used. This is decoupled from the container because it may be more than one datapoint.
       * @param element The data element description.
       * @param target An actor ref for the actor that should receive the end result.
       * @param transformations A list of transformations that must be applied.
       */
     final case class Start(
         container: ParserDataContainer,
+        data: Seq[ParserData],
         element: Element,
         target: ActorRef,
         transformations: Seq[TransformationDescription]
@@ -75,7 +87,7 @@ object TransformationWorker {
       *
       * @param t The class name of the transformer.
       */
-    case class PreparationTimeout(t: String) extends TransformationWorkerMessages
+    final case class PreparationTimeout(t: String) extends TransformationWorkerMessages
 
     /**
       * A message that is send by a timer and indicates that the transformer
@@ -84,7 +96,7 @@ object TransformationWorker {
       *
       * @param t The class name of the transformer.
       */
-    case class TransformationTimeout(t: String) extends TransformationWorkerMessages
+    final case class TransformationTimeout(t: String) extends TransformationWorkerMessages
 
   }
 
@@ -115,7 +127,7 @@ object TransformationWorker {
     *
     * @param container A parser data container which holds the data.
     * @param target An actor ref that defines the target actor that shall receive the end result of the transformations.
-    * @param transformationData A list of data which is fed into the transformers.
+    * @param transformationData A list of data which is fed into the transformers and holds the intermediate and end results.
     * @param transformations The list of transformations to apply.
     */
   final case class TransformationWorkerStateData(
@@ -174,12 +186,13 @@ class TransformationWorker(agentRunIdentifier: Option[String])
       log.debug("Received start message.")
       if (msg.transformations.isEmpty) {
         log.debug("No transformations defined. Relaying data to target.")
-        msg.target ! msg.container
+        msg.target ! Finished(msg.container, msg.container.data.fold(Seq.empty[ParserData])(Seq(_)))
         stop()
       } else
         goto(TransformationWorkerState.Transforming) using TransformationWorkerStateData(
-          container = Option(msg.container),
+          container = Option(msg.container.copy(data = None)),
           target = Option(msg.target),
+          transformationData = msg.container.data.fold(Seq.empty[ParserData])(Seq(_)),
           transformations = msg.transformations
         )
     case Event(TransformationWorkerMessages.Stop, _) =>
@@ -222,7 +235,7 @@ class TransformationWorker(agentRunIdentifier: Option[String])
           log.debug("No transformations left.")
           data.target match {
             case None    => log.warning("No target defined for transformation queue end result!")
-            case Some(r) => data.container.foreach(c => r ! c.copy(data = msg.data))
+            case Some(t) => data.container.foreach(c => t ! Finished(c, data.transformationData))
           }
           stop()
         } else {
@@ -232,8 +245,7 @@ class TransformationWorker(agentRunIdentifier: Option[String])
               stop()
             case \/-(success) =>
               log.debug("Transformer initialised successfully at {}.", success.path)
-              val newContainer = data.container.map(_.copy(data = msg.data))
-              stay() using data.copy(container = newContainer)
+              stay() using data
           }
         }
       }

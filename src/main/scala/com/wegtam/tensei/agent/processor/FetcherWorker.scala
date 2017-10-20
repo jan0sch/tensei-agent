@@ -23,11 +23,14 @@ import com.wegtam.tensei.adt.{ AtomicTransformationDescription, TransformationDe
 import com.wegtam.tensei.agent.DataTreeDocument.DataTreeDocumentMessages
 import com.wegtam.tensei.agent.DataTreeNode.DataTreeNodeMessages
 import com.wegtam.tensei.agent.adt.ParserDataContainer
+import com.wegtam.tensei.agent.adt.types.ParserData
 import com.wegtam.tensei.agent.helpers.LoggingHelpers
 import com.wegtam.tensei.agent.processor.FetcherWorker.FetcherWorkerMessages
 import com.wegtam.tensei.agent.processor.TransformationWorker.TransformationWorkerMessages
 import org.dfasdl.utils.ElementHelpers
 import org.w3c.dom.Element
+
+import scala.collection.immutable.Seq
 
 object FetcherWorker {
 
@@ -50,11 +53,11 @@ object FetcherWorker {
       * @param target          An actor ref that defines the target actor that shall receive the result.
       * @param transformations The list of atomic transformations to apply.
       */
-    case class Fetch(
+    final case class Fetch(
         element: Element,
         locator: FetchDataLocator,
         target: ActorRef,
-        transformations: List[AtomicTransformationDescription]
+        transformations: Seq[AtomicTransformationDescription]
     ) extends FetcherWorkerMessages
 
     /**
@@ -62,7 +65,8 @@ object FetcherWorker {
       *
       * @param sequenceRowCounter An option to a sequence row counter.
       */
-    case class SequenceRowCounter(sequenceRowCounter: Option[Long]) extends FetcherWorkerMessages
+    final case class SequenceRowCounter(sequenceRowCounter: Option[Long])
+        extends FetcherWorkerMessages
 
     /**
       * Make the actor stop itself.
@@ -76,7 +80,7 @@ object FetcherWorker {
       * @param container The container holding the parsed data.
       * @param element   The data element description.
       */
-    case class Transform(container: ParserDataContainer, element: Element)
+    final case class Transform(container: ParserDataContainer, element: Element)
         extends FetcherWorkerMessages
 
   }
@@ -89,7 +93,7 @@ object FetcherWorker {
     * @return The props to create an actor.
     */
   def props(agentRunIdentifier: Option[String], source: ActorRef): Props =
-    Props(classOf[FetcherWorker], agentRunIdentifier, source)
+    Props(new FetcherWorker(agentRunIdentifier, source))
 
 }
 
@@ -220,6 +224,7 @@ class FetcherWorker(agentRunIdentifier: Option[String], source: ActorRef)
           val worker = context.actorOf(TransformationWorker.props(agentRunIdentifier))
           worker ! TransformationWorkerMessages.Start(
             container = data,
+            data = data.data.fold(Seq.empty[ParserData])(Seq(_)),
             element = element,
             target = target,
             transformations = elementTransformations

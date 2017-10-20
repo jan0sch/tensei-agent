@@ -25,6 +25,7 @@ import akka.actor._
 import akka.event.{ DiagnosticLoggingAdapter, Logging }
 import com.wegtam.tensei.adt._
 import com.wegtam.tensei.agent.adt.ParserDataContainer
+import com.wegtam.tensei.agent.adt.types.ParserData
 import com.wegtam.tensei.agent.helpers.{ LoggingHelpers, ProcessorHelpers }
 import com.wegtam.tensei.agent.processor.Fetcher.FetcherMessages
 import com.wegtam.tensei.agent.processor.MappingAllToAllWorker.{
@@ -32,6 +33,7 @@ import com.wegtam.tensei.agent.processor.MappingAllToAllWorker.{
   MappingAllToAllStateData
 }
 import com.wegtam.tensei.agent.processor.TransformationWorker.TransformationWorkerMessages
+import com.wegtam.tensei.agent.processor.TransformationWorker.TransformationWorkerMessages.Finished
 import com.wegtam.tensei.agent.writers.BaseWriter
 import com.wegtam.tensei.agent.writers.BaseWriter.{ BaseWriterMessages, WriterMessageMetaData }
 import org.dfasdl.utils.{ AttributeNames, DataElementType }
@@ -39,6 +41,7 @@ import org.w3c.dom.{ Document, Element }
 import org.w3c.dom.traversal.TreeWalker
 
 import scalaz._
+import scala.collection.immutable.Seq
 
 object MappingAllToAllWorker {
 
@@ -84,19 +87,18 @@ object MappingAllToAllWorker {
     * @param transformations A list of transformations descriptions.
     * @param transformedSourceData A buffer for the transformed source data.
     */
-  case class MappingAllToAllStateData(
-      atomics: List[AtomicTransformationDescription] = List.empty[AtomicTransformationDescription],
+  final case class MappingAllToAllStateData(
+      atomics: Seq[AtomicTransformationDescription] = Seq.empty,
       currentWriterMessageNumber: Long = 0L,
-      elementTransformationQueue: List[TransformationDescription] =
-        List.empty[TransformationDescription],
+      elementTransformationQueue: Seq[TransformationDescription] = Seq.empty,
       lastMappingKeyFieldValue: Option[Any] = None,
       lastWriterMessageNumber: Long = 0L,
       mappingKeyField: Option[MappingKeyFieldDefinition] = None,
-      sourceDataBuffer: List[ParserDataContainer] = List.empty[ParserDataContainer],
-      sourceFields: List[SourceElementAndDataTree] = List.empty[SourceElementAndDataTree],
-      targetFields: List[Element] = List.empty[Element],
-      transformations: List[TransformationDescription] = List.empty[TransformationDescription],
-      transformedSourceData: List[Any] = List.empty[Any]
+      sourceDataBuffer: Seq[ParserDataContainer] = Seq.empty,
+      sourceFields: Seq[SourceElementAndDataTree] = Seq.empty,
+      targetFields: Seq[Element] = Seq.empty,
+      transformations: Seq[TransformationDescription] = Seq.empty,
+      transformedSourceData: Seq[ParserData] = Seq.empty
   )
 
   /**
@@ -122,16 +124,17 @@ object MappingAllToAllWorker {
             targetTree: Document,
             targetTreeWalker: TreeWalker,
             writer: ActorRef): Props =
-    Props(classOf[MappingAllToAllWorker],
-          agentRunIdentifier,
-          fetcher,
-          maxLoops,
-          sequenceRow,
-          sourceDataTrees,
-          targetDfasdl,
-          targetTree,
-          targetTreeWalker,
-          writer)
+    Props(
+      new MappingAllToAllWorker(agentRunIdentifier,
+                                fetcher,
+                                maxLoops,
+                                sequenceRow,
+                                sourceDataTrees,
+                                targetDfasdl,
+                                targetTree,
+                                targetTreeWalker,
+                                writer)
+    )
 
 }
 
@@ -248,7 +251,7 @@ class MappingAllToAllWorker(
           log.warning("Data for element {} already received! Ignoring message!", c.elementId)
           data.sourceDataBuffer
         } else
-          data.sourceDataBuffer ::: c :: Nil
+          data.sourceDataBuffer :+ c
 
       if (buffer.size == data.sourceFields.size) {
         log.debug("Fetched all source data fields, moving to processing.")
@@ -283,9 +286,9 @@ class MappingAllToAllWorker(
     case Event(MapperMessages.ProcessNextPair, data) =>
       if (data.transformedSourceData.isEmpty && data.sourceDataBuffer.nonEmpty) {
         // We need to apply transformations to the collected source data.
-        val d: List[Any] = data.sourceDataBuffer.map(_.data)
+        val d: Seq[ParserData] = data.sourceDataBuffer.flatMap(_.data)
 
-        val elementTransformationQueue: List[TransformationDescription] =
+        val elementTransformationQueue: Seq[TransformationDescription] =
           if (data.targetFields.exists(_.hasAttribute(AttributeNames.DB_FOREIGN_KEY))) {
             val ts =
               data.targetFields.filter(_.hasAttribute(AttributeNames.DB_FOREIGN_KEY)).flatMap { e =>
@@ -313,7 +316,7 @@ class MappingAllToAllWorker(
                       )
                     )
                   )
-                  data.elementTransformationQueue ::: fetchForeignKeyValue :: Nil
+                  data.elementTransformationQueue :+ fetchForeignKeyValue
                 } else
                   data.elementTransformationQueue
               }
@@ -347,8 +350,8 @@ class MappingAllToAllWorker(
           self ! MapperMessages.ProcessNextPair
 
           stay() using data.copy(
-            sourceDataBuffer = List.empty[ParserDataContainer],
-            sourceFields = List.empty[SourceElementAndDataTree],
+            sourceDataBuffer = Seq.empty,
+            sourceFields = Seq.empty,
             transformedSourceData = d
           )
         }
@@ -445,20 +448,15 @@ class MappingAllToAllWorker(
           }
       }
 
-    case Event(c: ParserDataContainer, data) =>
+    case Event(Finished(c, d), data) =>
       log.debug("Received result of transformer worker.")
-
-      val transformedData: List[Any] = c.data match {
-        case l: List[Any] => l
-        case _            => List(c.data)
-      }
 
       self ! MapperMessages.ProcessNextPair
 
       stay() using data.copy(
-        sourceDataBuffer = List.empty[ParserDataContainer],
-        sourceFields = List.empty[SourceElementAndDataTree],
-        transformedSourceData = transformedData
+        sourceDataBuffer = Seq.empty,
+        sourceFields = Seq.empty,
+        transformedSourceData = d
       )
   }
 

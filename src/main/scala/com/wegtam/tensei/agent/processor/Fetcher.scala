@@ -26,6 +26,8 @@ import com.wegtam.tensei.agent.processor.Fetcher.{ FetcherMessages, FetcherState
 import com.wegtam.tensei.agent.processor.FetcherWorker.FetcherWorkerMessages
 import org.w3c.dom.Element
 
+import scala.collection.immutable.Seq
+
 object Fetcher {
 
   /**
@@ -57,8 +59,7 @@ object Fetcher {
         element: Element,
         sourceRef: ActorRef,
         locator: FetchDataLocator,
-        transformations: List[AtomicTransformationDescription] =
-          List.empty[AtomicTransformationDescription]
+        transformations: Seq[AtomicTransformationDescription] = Seq.empty
     ) extends FetcherMessages
 
     /**
@@ -115,7 +116,7 @@ object Fetcher {
     * @return The props to create the actor.
     */
   def props(agentRunIdentifier: Option[String]): Props =
-    Props(classOf[Fetcher], agentRunIdentifier)
+    Props(new Fetcher(agentRunIdentifier))
 
 }
 
