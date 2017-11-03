@@ -17,83 +17,33 @@
 
 package com.wegtam.tensei.agent.transformers
 
-import akka.testkit.TestActorRef
-import akka.util.ByteString
-import com.wegtam.tensei.adt.TransformerOptions
 import com.wegtam.tensei.agent.ActorSpec
-import com.wegtam.tensei.agent.transformers.BaseTransformer.{
-  PrepareForTransformation,
-  ReadyToTransform,
-  StartTransformation,
-  TransformerResponse
-}
+import com.wegtam.tensei.agent.adt.types.wrappers._
+import org.scalatest.prop.PropertyChecks
 
-class CastStringToLongTest extends ActorSpec {
+import scala.util.Try
+
+class CastStringToLongTest extends ActorSpec with PropertyChecks {
   describe("CastStringToLong") {
-    describe("with empty string") {
-      it("should return None") {
-        val actor = TestActorRef(CastStringToLong.props)
-
-        actor ! PrepareForTransformation
-
-        expectMsg(ReadyToTransform)
-
-        actor ! StartTransformation(List(ByteString("")),
-                                    new TransformerOptions(classOf[String], classOf[String]))
-
-        val response = TransformerResponse(List(None), None.getClass)
-
-        expectMsg(response)
+    describe("using valid numbers") {
+      it("should return the numbers") {
+        forAll() { (a: Long, b: Long, c: Long) =>
+          val is = List(a.toString.wrap, b.toString.wrap, c.toString.wrap)
+          val es = List(a.wrap, b.wrap, c.wrap)
+          CastStringToLong.castStrings(is) should be(es)
+        }
       }
     }
-    describe("with invalid number string") {
-      it("should return None") {
-        val actor = TestActorRef(CastStringToLong.props)
 
-        actor ! PrepareForTransformation
-
-        expectMsg(ReadyToTransform)
-
-        actor ! StartTransformation(List(ByteString("foo")),
-                                    new TransformerOptions(classOf[String], classOf[String]))
-
-        val response = TransformerResponse(List(None), None.getClass)
-
-        expectMsg(response)
-      }
-    }
-    describe("with valid number string") {
-      it("should return the number as Long value") {
-        val actor = TestActorRef(CastStringToLong.props)
-
-        actor ! PrepareForTransformation
-
-        expectMsg(ReadyToTransform)
-
-        actor ! StartTransformation(List(ByteString("123")),
-                                    new TransformerOptions(classOf[String], classOf[String]))
-
-        val response = TransformerResponse(List(123L), Long.getClass)
-
-        expectMsg(response)
-      }
-
-      it("should return the numbers as Long values") {
-        val actor = TestActorRef(CastStringToLong.props)
-
-        actor ! PrepareForTransformation
-
-        expectMsg(ReadyToTransform)
-
-        actor ! StartTransformation(List(ByteString("123"),
-                                         ByteString("456"),
-                                         ByteString("789"),
-                                         ByteString("-1")),
-                                    new TransformerOptions(classOf[String], classOf[String]))
-
-        val response = TransformerResponse(List(123L, 456L, 789L, -1L), Long.getClass)
-
-        expectMsg(response)
+    describe("containing invalid input") {
+      it("should omit invalid values") {
+        forAll() { (a: Long, b: String, c: Long, d: String) =>
+          whenever(Try(b.toLong).isFailure && Try(d.toLong).isFailure) {
+            val is = List(a.toString.wrap, b.wrap, c.toString.wrap, d.wrap)
+            val es = List(a.wrap, c.wrap)
+            CastStringToLong.castStrings(is) should be(es)
+          }
+        }
       }
     }
   }

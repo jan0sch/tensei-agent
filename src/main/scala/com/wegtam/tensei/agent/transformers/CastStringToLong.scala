@@ -18,16 +18,33 @@
 package com.wegtam.tensei.agent.transformers
 
 import akka.actor.Props
-import akka.util.ByteString
+import com.wegtam.tensei.agent.adt.types.{ ParserData, StringData }
+import com.wegtam.tensei.agent.adt.types.wrappers._
 import com.wegtam.tensei.agent.transformers.BaseTransformer.{
   StartTransformation,
   TransformerResponse
 }
 
-import scala.language.existentials
+import scala.collection.immutable.Seq
+import scala.util.Try
 
 object CastStringToLong {
   def props: Props = Props(new CastStringToLong())
+
+  /**
+    * Parse the given list of data and cast all strings to long values if possible.
+    * Unconvertable strings and non-string values will be omitted from the result list.
+    *
+    * @param ds A list of data.
+    * @return A list of data containing long numbers which may be empty.
+    */
+  def castStrings(ds: Seq[ParserData]): Seq[ParserData] = {
+    val rs = ds.flatMap {
+      case StringData(v) => Try(v.utf8String.toLong).toOption
+      case _             => None
+    }
+    rs.map(_.wrap)
+  }
 }
 
 /**
@@ -36,30 +53,8 @@ object CastStringToLong {
 class CastStringToLong extends BaseTransformer {
   override def transform: Receive = {
     case msg: StartTransformation =>
-      val ret =
-        if (msg.src.isEmpty)
-          (List(None), None.getClass)
-        else {
-          val strings = msg.src.map {
-            case bs: ByteString => bs.utf8String
-            case None           => ""
-            case otherData      => otherData.toString
-          }
-          val casted: List[Option[Long]] = strings.map(
-            e =>
-              if (e.matches("-?\\d+"))
-                Option(e.toLong)
-              else
-              None
-          )
-          if (casted.contains(None))
-            (List(None), None.getClass)
-          else
-            (casted.flatten, Long.getClass)
-        }
-
-      context become receive
-
-      sender() ! TransformerResponse(ret._1, ret._2)
+      val rs = CastStringToLong.castStrings(msg.src)
+      sender() ! TransformerResponse(rs)
+      context.become(receive)
   }
 }
