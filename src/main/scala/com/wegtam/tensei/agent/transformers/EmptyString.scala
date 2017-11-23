@@ -19,25 +19,26 @@ package com.wegtam.tensei.agent.transformers
 
 import akka.actor.Props
 import akka.util.ByteString
+import com.wegtam.tensei.agent.adt.types.StringData
 import com.wegtam.tensei.agent.transformers.BaseTransformer.{
   StartTransformation,
   TransformerResponse
 }
 
+import scala.collection.immutable.Seq
+
 object EmptyString {
-  def props: Props = Props(classOf[EmptyString])
+  def props: Props = Props(new EmptyString())
 }
 
 /**
-  * This transformer simply returns an empty string. It can be used to erase
-  * data from mapped columns that you don't care about.
-  * For general convenience it returns a `List("")` and a `classOf[String]` type info.
+  * This transformer discards the input and returns a single empty string.
   */
 class EmptyString extends BaseTransformer {
   override def transform: Receive = {
     case msg: StartTransformation =>
       log.debug("Return an empty string for {} sources.", msg.src.size)
       context become receive
-      sender() ! TransformerResponse(List(ByteString("")), classOf[String])
+      sender() ! TransformerResponse(Seq(StringData(ByteString.empty)))
   }
 }
