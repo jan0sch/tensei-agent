@@ -27,7 +27,72 @@ import com.wegtam.tensei.agent.transformers.BaseTransformer.{
 }
 
 object LowerOrUpper {
-  def props: Props = Props(classOf[LowerOrUpper])
+  def props: Props = Props(new LowerOrUpper())
+
+  /**
+    * A sealed trait for the modes of the transformer.
+    */
+  sealed trait LowerOrUpperMode
+
+  object LowerOrUpperMode {
+
+    /**
+      * Lower case all characters.
+      */
+    case object LowerAll extends LowerOrUpperMode
+
+    /**
+      * Lower case only the first character.
+      */
+    case object LowerFirst extends LowerOrUpperMode
+
+    /**
+      * Perform no operation which means that the input is returned as is.
+      */
+    case object NoOp extends LowerOrUpperMode
+
+    /**
+      * Upper case all characters.
+      */
+    case object UpperAll extends LowerOrUpperMode
+
+    /**
+      * Upper case only the first character.
+      */
+    case object UpperFirst extends LowerOrUpperMode
+
+    /**
+      * Return the lower or upper mode which is represented by the given string.
+      *
+      * @param s A string containing a lower or upper mode.
+      * @return The de-serialised lower or upper mode.
+      */
+    @throws[NoSuchElementException](cause = "The given string is not a LowerOrUpperMode!")
+    def valueOf(s: String): LowerOrUpperMode = s match {
+      case "LowerAll"   => LowerOrUpperMode.LowerAll
+      case "LowerFirst" => LowerOrUpperMode.LowerFirst
+      case "NoOp"       => LowerOrUpperMode.NoOp
+      case "UpperAll"   => LowerOrUpperMode.UpperAll
+      case "UpperFirst" => LowerOrUpperMode.UpperFirst
+    }
+
+  }
+
+  /**
+    * Perform a lower or upper case operation on the given string.
+    *
+    * @param l The locale that shall be used for the operation.
+    * @param m The mode which determines what characters are modified in which way.
+    * @param s A string that shall be processed.
+    * @return The modified string.
+    */
+  def perform(l: Locale)(m: LowerOrUpperMode)(s: String): String =
+    m match {
+      case LowerOrUpperMode.LowerAll   => s.toLowerCase(l)
+      case LowerOrUpperMode.UpperAll   => s.toUpperCase(l)
+      case LowerOrUpperMode.LowerFirst => s"""${s.take(1).toLowerCase(l)}${s.drop(1)}"""
+      case LowerOrUpperMode.UpperFirst => s"""${s.take(1).toUpperCase(l)}${s.drop(1)}"""
+    }
 }
 
 /**
@@ -54,36 +119,17 @@ class LowerOrUpper extends BaseTransformer {
         else
           Locale.getDefault
       }
+      val mode = LowerOrUpperMode.valueOf(paramValue("perform")(params))
 
-      def performOp(mode: String)(data: String): ByteString =
-        if (data.nonEmpty) {
-          mode.toLowerCase match {
-            case "lower"      => ByteString(data.toLowerCase(locale))
-            case "upper"      => ByteString(data.toUpperCase(locale))
-            case "firstlower" => ByteString(s"${data.take(1).toLowerCase(locale)}${data.drop(1)}")
-            case "firstupper" => ByteString(s"${data.take(1).toUpperCase(locale)}${data.drop(1)}")
-            case _            => ByteString(data)
-          }
-        } else
-          ByteString("")
-
-      val response: TransformerResponse =
-        if (msg.src.nonEmpty) {
-          paramValueO("perform")(params).fold(TransformerResponse(msg.src, classOf[String])) {
-            mode =>
-              val res = msg.src.map {
-                case bs: ByteString => performOp(mode)(bs.utf8String)
-                case st: String     => performOp(mode)(st)
-                case otherData      => otherData
-              }
-              TransformerResponse(res, classOf[String])
-          }
-        } else
-          TransformerResponse(List(ByteString("")), classOf[String])
+      val results = msg.src.map {
+        case StringData(v) =>
+          StringData(ByteString(LowerOrUpper.perform(locale)(mode)(v.utf8String)))
+        case d => d
+      }
 
       log.debug("Finished lower or upper of src string!")
 
       context become receive
-      sender() ! response
+      sender() ! TransformerResponse(results)
   }
 }
