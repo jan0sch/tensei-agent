@@ -23,20 +23,21 @@ import com.wegtam.tensei.agent.transformers.BaseTransformer.{
   TransformerResponse
 }
 
+import scala.collection.immutable.Seq
+
 object Nullify {
-  def props: Props = Props(classOf[Nullify])
+  def props: Props = Props(new Nullify())
 }
 
 /**
   * This transformer simply returns no data. It can be used to erase data from mapped columns
   * that you don't care about.
-  * For general convenience it returns a `List(None)` and a `None.getClass` type info.
   */
 class Nullify extends BaseTransformer {
   override def transform: Receive = {
     case msg: StartTransformation =>
       log.debug("Erasing data from {} sources.", msg.src.size)
       context become receive
-      sender() ! TransformerResponse(List(None), None.getClass)
+      sender() ! TransformerResponse(Seq.empty)
   }
 }
