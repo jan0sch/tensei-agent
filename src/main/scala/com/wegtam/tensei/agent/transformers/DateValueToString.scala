@@ -18,17 +18,35 @@
 package com.wegtam.tensei.agent.transformers
 
 import java.text.SimpleDateFormat
-import java.time.{ LocalDate, LocalTime, OffsetDateTime }
 
 import akka.actor.Props
 import akka.util.ByteString
+import com.wegtam.tensei.agent.adt.types._
 import com.wegtam.tensei.agent.transformers.BaseTransformer.{
   StartTransformation,
   TransformerResponse
 }
 
+import scala.collection.immutable.Seq
+
 object DateValueToString {
   def props: Props = Props(new DateValueToString())
+
+  /**
+    * Parse the given list of parser data values and convert each date/time
+    * value into a formatted string specified by the given dateformat.
+    *
+    * @param df The formatter to be used.
+    * @param ds A list of parser data values.
+    * @return A list of parser data values in which the date/time values are replaced by formatted string values.
+    */
+  def dateTimeValueToString(df: SimpleDateFormat)(ds: Seq[ParserData]): Seq[ParserData] =
+    ds.map {
+      case DateData(v)      => StringData(ByteString(df.format(v)))
+      case TimeData(v)      => StringData(ByteString(df.format(v)))
+      case TimestampData(v) => StringData(ByteString(df.format(v)))
+      case d                => d
+    }
 }
 
 /**
@@ -47,26 +65,11 @@ class DateValueToString extends BaseTransformer {
       log.debug("Start DateValueToString")
       val params = msg.options.params
       val format = paramValue("format")(params).trim
+      val df     = new SimpleDateFormat(format)
+      val rs     = DateValueToString.dateTimeValueToString(df)(msg.src)
 
-      val result: List[ByteString] =
-        if (format.isEmpty)
-          msg.src.map(e => ByteString(e.toString))
-        else {
-          val formatter = new SimpleDateFormat(format)
-          msg.src.map {
-            case d: LocalDate          => ByteString(formatter.format(d))
-            case d: LocalTime          => ByteString(formatter.format(d))
-            case d: OffsetDateTime     => ByteString(formatter.format(d))
-            case d: java.sql.Date      => ByteString(formatter.format(d))
-            case d: java.sql.Time      => ByteString(formatter.format(d))
-            case d: java.sql.Timestamp => ByteString(formatter.format(d))
-            case anyType =>
-              ByteString(anyType.toString)
-          }
-        }
-
-      log.debug("DateValueToString transformed '{}' into '{}'", msg.src, result)
+      log.debug("DateValueToString transformed '{}' into '{}'", msg.src, rs)
       context become receive
-      sender() ! TransformerResponse(result, classOf[String])
+      sender() ! TransformerResponse(rs)
   }
 }
