@@ -18,7 +18,8 @@
 package com.wegtam.tensei.agent.transformers.atomic
 
 import akka.actor.Props
-import akka.util.ByteString
+import com.wegtam.tensei.agent.adt.types.IntegerData
+import com.wegtam.tensei.agent.transformers.atomic.TimestampAdjuster.TimestampAdjusterMode
 import com.wegtam.tensei.agent.transformers.BaseTransformer
 import com.wegtam.tensei.agent.transformers.BaseTransformer.{
   StartTransformation,
@@ -28,7 +29,51 @@ import com.wegtam.tensei.agent.transformers.BaseTransformer.{
 import scala.util.Try
 
 object TimestampAdjuster {
-  def props: Props = Props(classOf[TimestampAdjuster])
+  def props: Props = Props(new TimestampAdjuster())
+
+  /**
+    * A sealed trait for the supported modes of the timestamp adjuster.
+    */
+  sealed trait TimestampAdjusterMode
+
+  object TimestampAdjusterMode {
+
+    /**
+      * Multiply the given numeric timestamp value by 1000.
+      */
+    case object Add extends TimestampAdjusterMode
+
+    /**
+      * Divide the given numeric timestamp value through 1000.
+      */
+    case object Reduce extends TimestampAdjusterMode
+
+    /**
+      * Return the timestamp adjuster mode that is represented
+      * by the given string.
+      *
+      * @param s A string containing a timestamp adjuster mode.
+      * @return The decoded timestamp adjuster mode.
+      */
+    def valueOf(s: String): TimestampAdjusterMode = s match {
+      case "Add"    => Add
+      case "Reduce" => Reduce
+    }
+  }
+
+  /**
+    * Adjust the given numeric timestamp using the provided mode.
+    *
+    * @param m The mode that determines how the timestamp will be adjusted.
+    * @param t A numeric timestamp value (either seconds or milliseconds).
+    * @return The adjusted numeric timestamp value.
+    */
+  def adjustTimestamp(m: TimestampAdjusterMode)(t: Long): Long =
+    m match {
+      case TimestampAdjusterMode.Add    => t * 1000
+      case TimestampAdjusterMode.Reduce => t / 1000
+    }
+
 }
 
 /**
@@ -47,40 +92,15 @@ class TimestampAdjuster extends BaseTransformer {
       val params = msg.options.params
 
       val perform = paramValue("perform")(params)
+      val mode =
+        Try(TimestampAdjusterMode.valueOf(perform)).toOption.getOrElse(TimestampAdjusterMode.Add)
 
-      def adjustTimestamp(t: Long): Long =
-        perform match {
-          case "reduce" => t / 1000
-          case _        => t * 1000
-        }
-
-      /**
-        * Try to convert the given data into a long value and apply
-        * the adjust operation on it.
-        *
-        * @param t The data that should hold a timestamp.
-        * @return Either the adjusted timestamp or the passed in data if an error occured.
-        */
-      def tryToAdjustTimestamp(t: Any): Any =
-        Try {
-          val num = t match {
-            case d: java.math.BigDecimal => d.longValue()
-            case bs: ByteString          => bs.utf8String.toLong
-            case i: Int                  => i.toLong
-            case l: Long                 => l
-            case otherData               => otherData.toString.toLong
-          }
-          adjustTimestamp(num)
-        } match {
-          case scala.util.Failure(e) =>
-            log.error(e, "An error occured while trying to adjust the timestamp value {}!", t)
-            t
-          case scala.util.Success(a) => a
-        }
-
-      val results = msg.src.map(e => tryToAdjustTimestamp(e))
+      val results = msg.src.map {
+        case IntegerData(v) => IntegerData(TimestampAdjuster.adjustTimestamp(mode)(v))
+        case d              => d
+      }
 
       context become receive
-      sender() ! TransformerResponse(results, classOf[String])
+      sender() ! TransformerResponse(results)
   }
 }
