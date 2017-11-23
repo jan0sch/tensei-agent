@@ -20,15 +20,28 @@ package com.wegtam.tensei.agent.transformers
 import akka.testkit.TestActorRef
 import akka.util.ByteString
 import com.wegtam.tensei.agent.ActorSpec
-import com.wegtam.tensei.agent.transformers.BaseTransformer.{
-  PrepareForTransformation,
-  ReadyToTransform,
-  StartTransformation,
-  TransformerResponse
-}
+import com.wegtam.tensei.agent.transformers.BaseTransformer.{PrepareForTransformation, ReadyToTransform, StartTransformation, TransformerResponse}
 import com.wegtam.tensei.adt.TransformerOptions
+import com.wegtam.tensei.agent.adt.types.StringData
+import org.scalatest.prop.PropertyChecks
 
-class ConcatTest extends ActorSpec {
+import scala.collection.immutable.Seq
+
+class ConcatTest extends ActorSpec with PropertyChecks {
+  describe("Concat") {
+    describe("concat") {
+      describe("using only strings") {
+        it("must concatenate correctly") {
+          forAll("strings") { (s: Seq[String], pr: String, su: String, se: String) =>
+            val ds = s.map(v => StringData(ByteString(v)))
+            val ex = ds.map(_.v.utf8String).mkString(pr, se, su)
+            val cs = Concat.concat(pr)(se)(su)(ds)
+            cs should be(ex)
+          }
+        }
+      }
+    }
+  }
   describe("Transformers") {
     describe("Concat") {
       describe("when given an empty list") {

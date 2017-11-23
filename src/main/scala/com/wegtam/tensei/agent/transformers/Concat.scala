@@ -17,15 +17,44 @@
 
 package com.wegtam.tensei.agent.transformers
 
+import java.util.Base64
+
+import akka.actor.Props
+import com.wegtam.tensei.agent.adt.types._
+import com.wegtam.tensei.agent.adt.types.wrappers._
 import com.wegtam.tensei.agent.transformers.BaseTransformer.{
   StartTransformation,
   TransformerResponse
 }
-import akka.actor.Props
-import akka.util.ByteString
+
+import scala.collection.immutable.Seq
 
 object Concat {
   def props: Props = Props(new Concat())
+
+  /**
+    * Concatenate the given list of parser data into a single string using the
+    * provided prefix, separator and suffix.
+    *
+    * @param prefix    A prefix which may be empty.
+    * @param separator A separator which may be empty.
+    * @param suffix    A suffix which may be empty.
+    * @param ds        A list of parser data values.
+    * @return A string containing the concatenated values.
+    */
+  def concat(prefix: String)(separator: String)(suffix: String)(ds: Seq[ParserData]): String = {
+    val strings = ds.map {
+      case BinaryData(v) =>
+        Base64.getEncoder.encodeToString(v) // TODO Check if this is the expected behaviour!
+      case DateData(v)      => v.toString
+      case DecimalData(v)   => v.toPlainString
+      case IntegerData(v)   => v.toString
+      case StringData(v)    => v.utf8String
+      case TimeData(v)      => v.toString
+      case TimestampData(v) => v.toString
+    }
+    strings.mkString(prefix, separator, suffix)
+  }
 }
 
 /**
@@ -45,19 +74,14 @@ class Concat extends BaseTransformer {
       val prefix    = paramValue("prefix")(params)
       val suffix    = paramValue("suffix")(params)
 
-      val strings = msg.src.map {
-        case bs: ByteString => bs.utf8String
-        case None           => ""
-        case otherData      => otherData.toString
-      }
-
-      val concatenatedSources = strings.mkString(prefix, separator, suffix)
+      val concat: Seq[ParserData] => String = Concat.concat(prefix)(separator)(suffix)
+      val concatenatedSources               = concat(msg.src)
       log.debug("Finnished concatenation of sources.")
       log.debug("Concatenated {} elements into {} characters.",
                 msg.src.length,
                 concatenatedSources.length)
 
       context become receive
-      sender() ! TransformerResponse(List(ByteString(concatenatedSources)), classOf[String])
+      sender() ! TransformerResponse(Seq(concatenatedSources.wrap))
   }
 }
