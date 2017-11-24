@@ -128,50 +128,6 @@ class TransformationWorkerTest extends ActorSpec with XmlTestHelpers {
       }
     }
 
-    describe("given multiple transformations") {
-      it("should apply all transformations") {
-        val actor = TestFSMRef(new TransformationWorker(agentRunIdentifier))
-
-        actor.stateName should be(TransformationWorkerState.Idle)
-
-        val dfasdl =
-          """
-            |<dfasdl xmlns="http://www.dfasdl.org/DFASDL"
-            |        default-encoding="utf-8" semantic="niem">
-            |  <elem id="row">
-            |    <str id="ELEMENT-ID"/>
-            |  </elem>
-            |</dfasdl>
-          """.stripMargin
-        val doc = createTestDocumentBuilder().parse(
-          new ByteArrayInputStream(dfasdl.getBytes(Charset.defaultCharset()))
-        )
-        val data         = ParserDataContainer(1449499335060L, "ELEMENT-ID")
-        val expectedData = ParserDataContainer(List(1449499335000L), "ELEMENT-ID")
-        val transformations = List(
-          TransformationDescription(
-            transformerClassName = "com.wegtam.tensei.agent.transformers.atomic.TimestampAdjuster",
-            options =
-              TransformerOptions(classOf[String], classOf[String], List(("perform", "reduce")))
-          ),
-          TransformationDescription(
-            transformerClassName = "com.wegtam.tensei.agent.transformers.atomic.TimestampAdjuster",
-            options = TransformerOptions(classOf[String], classOf[String], List(("perform", "add")))
-          ),
-          TransformationDescription(
-            transformerClassName = "com.wegtam.tensei.agent.transformers.atomic.BoxDataIntoList",
-            options = TransformerOptions(classOf[String], classOf[String])
-          )
-        )
-        actor ! TransformationWorkerMessages.Start(data,
-                                                   doc.getElementById(data.elementId),
-                                                   self,
-                                                   transformations)
-        val c = expectMsgType[ParserDataContainer]
-        c.data should be(expectedData.data)
-      }
-    }
-
     describe("given multiple transformations on a data list") {
       it("should apply all transformations") {
         val actor = TestFSMRef(new TransformationWorker(agentRunIdentifier))
