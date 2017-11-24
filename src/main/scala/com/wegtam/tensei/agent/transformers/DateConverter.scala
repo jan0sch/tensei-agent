@@ -22,6 +22,7 @@ import java.time._
 
 import akka.actor.Props
 import akka.util.ByteString
+import com.wegtam.tensei.agent.adt.types.{ IntegerData, TimestampData }
 import com.wegtam.tensei.agent.transformers.BaseTransformer.{
   StartTransformation,
   TransformerResponse
@@ -31,6 +32,19 @@ import scala.util.Try
 
 object DateConverter {
   def props: Props = Props(new DateConverter())
+
+  /**
+    * Convert the given numeric timestamp into a real one.
+    *
+    * @param tz The timezone of the timestamp.
+    * @param d  An integer parser data value.
+    * @return A timestamp parser data value.
+    */
+  def numericToTimestamp(tz: ZoneId)(d: IntegerData): TimestampData = {
+    val i = Instant.ofEpochMilli(d.v)
+    val z = ZonedDateTime.ofInstant(i, tz)
+    TimestampData(z.toOffsetDateTime)
+  }
 
   def convertDate(df: DateTimeFormatter)(tz: ZoneId)(data: Any): Any =
     data match {
