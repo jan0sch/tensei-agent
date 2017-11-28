@@ -19,15 +19,55 @@ package com.wegtam.tensei.agent.transformers
 
 import akka.actor.Props
 import akka.util.ByteString
+import com.wegtam.tensei.agent.adt.types._
 import com.wegtam.tensei.agent.transformers.BaseTransformer.{
   StartTransformation,
   TransformerResponse
 }
 
 import scala.collection.immutable.Seq
+import scala.util.Try
 
 object ExtractBiggestValue {
-  def props: Props = Props(classOf[ExtractBiggestValue])
+  def props: Props = Props(new ExtractBiggestValue())
+
+  /**
+    * Extract the "biggest" value from the given list of parser data values.
+    * Depending on the input this function generates different output.
+    *
+    * <ul>
+    *   <li>If all input is numeric data then the biggest number is returned
+    *   which is either an integer or a decimal.</li>
+    *   <li>If different kinds of input values are provided then these are all
+    *   converted into strings and the longest string is returned.</li>
+    * </ul>
+    *
+    * @param ds A list of parser data values.
+    * @return The "biggest" value which is either a numeric (decimal or integer) or a string value.
+    */
+  @throws[NoSuchElementException](cause = "The given list is empty.")
+  def extractBiggestValue(ds: Seq[ParserData]): ParserData = {
+    val ns: Seq[java.math.BigDecimal] = ds.map {
+      case DecimalData(v) => v
+      case IntegerData(v) => new java.math.BigDecimal(v)
+    }
+    if (ns.size != ds.size) {
+      // We have not only numbers...
+      val strs = ds.map {
+        case BinaryData(v)    => v.map(b => String.format("%02X", b)).mkString
+        case DateData(v)      => v.toString
+        case DecimalData(v)   => v.toPlainString
+        case IntegerData(v)   => v.toString
+        case StringData(v)    => v.utf8String
+        case TimeData(v)      => v.toString
+        case TimestampData(v) => v.toString
+      }
+      StringData(ByteString(strs.sortBy(_.length).reverse.head))
+    } else {
+      val b = ns.sorted.reverse.head
+      Try(b.longValueExact()).map(l => IntegerData(l)).getOrElse(DecimalData(b))
+    }
+  }
 }
 
 /**
@@ -38,45 +78,8 @@ object ExtractBiggestValue {
 class ExtractBiggestValue extends BaseTransformer {
   override def transform: Receive = {
     case msg: StartTransformation =>
-      val returnValue =
-        if (msg.src.nonEmpty) {
-          val nums: Seq[java.math.BigDecimal] = msg.src.flatMap(anyToDecimal)
-          if (nums.size != msg.src.size) {
-            // Some values couldn't be converted to numerical values.
-            val longestString = msg.src
-              .map {
-                case bs: ByteString => bs.utf8String
-                case otherData      => otherData.toString
-              }
-              .sortBy(_.length)
-              .reverse
-              .headOption
-              .getOrElse("")
-            ByteString(longestString)
-          } else
-            ByteString(nums.max.toPlainString)
-        } else
-          ByteString("")
-
-      context become receive
-      sender() ! TransformerResponse(List(returnValue), classOf[String])
+      val response = ExtractBiggestValue.extractBiggestValue(msg.src)
+      sender() ! TransformerResponse(Seq(response))
+      context.become(receive)
   }
-
-  /**
-    * Try to convert any given value into a BigDecimal.
-    *
-    * @param a A value that should ideally be a number or a string containing a number.
-    * @return An option to the created decimal value.
-    */
-  private def anyToDecimal(a: Any): Option[java.math.BigDecimal] = {
-    import scala.util.control.Exception._
-
-    a match {
-      case d: java.math.BigDecimal => Option(d)
-      case bs: ByteString =>
-        catching(classOf[NumberFormatException]).opt(new java.math.BigDecimal(bs.utf8String))
-      case _ => catching(classOf[NumberFormatException]).opt(new java.math.BigDecimal(a.toString))
-    }
-  }
-
 }
