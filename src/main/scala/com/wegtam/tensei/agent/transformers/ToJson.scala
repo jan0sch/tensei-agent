@@ -19,15 +19,48 @@ package com.wegtam.tensei.agent.transformers
 
 import akka.actor.Props
 import akka.util.ByteString
-import argonaut._, Argonaut._
-
+import argonaut._
+import Argonaut._
+import com.wegtam.tensei.agent.adt.types._
+import com.wegtam.tensei.agent.adt.types.wrappers._
 import com.wegtam.tensei.agent.transformers.BaseTransformer.{
   StartTransformation,
   TransformerResponse
 }
 
+import scala.collection.immutable.Seq
+
 object ToJson {
   def props: Props = Props(new ToJson())
+
+  /**
+    * Convert the given list of parser data values into JSON strings
+    * which will be returned as a list of string parser data values.
+    *
+    * If labels are defined then they will be used and the JSON structure
+    * will be an object holding the parser data value in the labeled attribute.
+    *
+    * @param ls A list of lables which may be empty.
+    * @param ps A list of parser data values.
+    * @return A list of string parser data values.
+    */
+  def toJsonString(ls: Seq[String])(ps: Seq[ParserData]): Seq[ParserData] =
+    ps.zipAll(ls, StringData(ByteString("")), "").map { t =>
+      val (p, l) = t
+      val jsonValue: Json = p match {
+        case BinaryData(v)    => v.asJson
+        case DateData(v)      => v.asJson
+        case DecimalData(v)   => v.asJson
+        case IntegerData(v)   => v.asJson
+        case StringData(v)    => v.asJson
+        case TimeData(v)      => v.asJson
+        case TimestampData(v) => v.asJson
+      }
+      if (l.nonEmpty)
+        StringData(ByteString(jsonValue.nospaces.wrap))
+      else
+        StringData(ByteString(Json(l := jsonValue).nospaces.wrap))
+    }
 }
 
 /**
@@ -41,22 +74,9 @@ class ToJson extends BaseTransformer with JsonHelpers {
       log.debug("Starting conversion to json.")
       val label = paramValue("label")(options.params)
 
-      val jsonString: ByteString =
-        if (src.size < 2)
-          src.headOption match {
-            case None       => ByteString("")
-            case Some(head) => ByteString(createJson(head, label).nospaces)
-          } else {
-          val parts: List[Json] = src.map(data => createJson(data, ""))
-          val js =
-            if (label.isEmpty)
-              jArray(parts)
-            else
-              Json(s"$label" := jArray(parts))
-          ByteString(js.nospaces)
-        }
+      val result = ToJson.toJsonString(Seq(label))(src)
 
       context.become(receive)
-      sender() ! TransformerResponse(List(jsonString), classOf[String])
+      sender() ! TransformerResponse(result)
   }
 }
